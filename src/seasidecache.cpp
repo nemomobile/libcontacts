@@ -1384,6 +1384,15 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
                 cacheItem->itemData->mergeCandidatesFetched(candidateIds);
             }
         }
+        else if (m_fetchFilter != FilterNone) {
+            // We have completed fetching this filter set
+            completeSynchronizeList(
+                this,
+                m_contacts[m_fetchFilter],
+                m_cacheIndex,
+                m_contactIdRequest.ids(),
+                m_queryIndex);
+        }
     } else if (request == &m_relationshipSaveRequest || request == &m_relationshipRemoveRequest) {
         QSet<ContactIdType> contactIds;
         foreach (const QContactRelationship &relationship, m_relationshipSaveRequest.relationships() +
@@ -1614,9 +1623,10 @@ void SeasideCache::keepPopulated()
     if (!m_keepPopulated) {
         m_keepPopulated = true;
 
-        // Start a query to fully populate the cache
-        m_refreshRequired = true;
-        requestUpdate();
+        // Start a query to fully populate the cache, starting with favorites
+        m_fetchFilter = FilterFavorites;
+        m_fetchRequest.setFilter(QContactFavorite::match());
+        m_fetchRequest.start();
     }
 }
 

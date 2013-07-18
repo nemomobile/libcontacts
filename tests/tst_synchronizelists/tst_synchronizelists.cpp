@@ -234,17 +234,7 @@ void tst_SynchronizeLists::filtered()
     m_cache = original;
     m_filter = expected;
 
-    int c = 0;
-    int r = 0;
-
-    synchronizeFilteredList(this, m_cache, c, reference, r);
-
-    if (c < m_cache.count())
-        m_cache.remove(c, m_cache.count() - c);
-    for (; r < reference.count(); ++r) {
-        if (m_filter.contains(reference.at(r)))
-            m_cache.append(reference.at(r));
-    }
+    synchronizeFilteredList(this, m_cache, reference);
 
     if (m_cache != expected) {
         qDebug() << "expected" << expected;
@@ -290,15 +280,7 @@ void tst_SynchronizeLists::unfiltered()
     m_filterEnabled = false;
     m_cache = original;
 
-    int c = 0;
-    int r = 0;
-
-    synchronizeList(this, m_cache, c, reference, r);
-
-    if (c < m_cache.count())
-        m_cache.remove(c, m_cache.count() - c);
-    for (; r < reference.count(); ++r)
-        m_cache.append(reference.at(r));
+    synchronizeList(this, m_cache, reference);
 
     if (m_cache != reference) {
         qDebug() << "expected" << reference;
