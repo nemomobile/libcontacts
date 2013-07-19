@@ -529,8 +529,11 @@ void SeasideCache::updateContactData(
         models.at(i)->sourceDataChanged(row, row);
 }
 
-void SeasideCache::removeContact(const QContact &contact)
+bool SeasideCache::removeContact(const QContact &contact)
 {
+    if (!validId(contact.id()))
+        return false;
+
     ContactIdType id = apiId(contact);
 
     instancePtr->m_contactsToRemove.append(id);
@@ -539,6 +542,7 @@ void SeasideCache::removeContact(const QContact &contact)
     instancePtr->removeContactData(id, FilterAll);
 
     instancePtr->requestUpdate();
+    return true;
 }
 
 void SeasideCache::removeContactData(
@@ -558,24 +562,30 @@ void SeasideCache::removeContactData(
         models.at(i)->sourceItemsRemoved();
 }
 
-void SeasideCache::fetchConstituents(const QContact &contact)
+bool SeasideCache::fetchConstituents(const QContact &contact)
 {
     QContactId personId(contact.id());
+    if (!validId(personId))
+        return false;
 
     if (!instancePtr->m_contactsToFetchConstituents.contains(personId)) {
         instancePtr->m_contactsToFetchConstituents.append(personId);
         instancePtr->requestUpdate();
     }
+    return true;
 }
 
-void SeasideCache::fetchMergeCandidates(const QContact &contact)
+bool SeasideCache::fetchMergeCandidates(const QContact &contact)
 {
     QContactId personId(contact.id());
+    if (!validId(personId))
+        return false;
 
     if (!instancePtr->m_contactsToFetchCandidates.contains(personId)) {
         instancePtr->m_contactsToFetchCandidates.append(personId);
         instancePtr->requestUpdate();
     }
+    return true;
 }
 
 const QVector<SeasideCache::ContactIdType> *SeasideCache::contacts(FilterType type)
