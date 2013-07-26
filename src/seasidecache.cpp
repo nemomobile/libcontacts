@@ -204,6 +204,7 @@ SeasideCache::SeasideCache()
     instancePtr = this;
 
     m_timer.start();
+    m_fetchPostponed.invalidate();
 
 #ifdef HAS_MLITE
     connect(&m_displayLabelOrderConf, SIGNAL(valueChanged()), this, SLOT(displayLabelOrderChanged()));
