@@ -166,6 +166,13 @@ bool SeasideCache::validId(const ContactIdType &id)
 #endif
 }
 
+#ifndef USING_QTPIM
+bool SeasideCache::validId(const QContactId &id)
+{
+    return (id.localId() != 0);
+}
+#endif
+
 quint32 SeasideCache::internalId(const QContact &contact)
 {
     return internalId(contact.id());
@@ -459,9 +466,17 @@ SeasideCache::CacheItem *SeasideCache::itemById(int id)
 
 SeasideCache::CacheItem *SeasideCache::existingItem(const ContactIdType &id)
 {
+#ifdef USING_QTPIM
     return existingItem(internalId(id));
+#else
+    QHash<quint32, CacheItem>::iterator it = instancePtr->m_people.find(id);
+    return it != instancePtr->m_people.end()
+            ? &(*it)
+            : 0;
+#endif
 }
 
+#ifdef USING_QTPIM
 SeasideCache::CacheItem *SeasideCache::existingItem(quint32 iid)
 {
     QHash<quint32, CacheItem>::iterator it = instancePtr->m_people.find(iid);
@@ -469,6 +484,7 @@ SeasideCache::CacheItem *SeasideCache::existingItem(quint32 iid)
             ? &(*it)
             : 0;
 }
+#endif
 
 QContact SeasideCache::contactById(const ContactIdType &id)
 {
@@ -535,10 +551,9 @@ void SeasideCache::updateContactData(
 
 bool SeasideCache::removeContact(const QContact &contact)
 {
-    if (!validId(contact.id()))
-        return false;
-
     ContactIdType id = apiId(contact);
+    if (!validId(id))
+        return false;
 
     instancePtr->m_contactsToRemove.append(id);
     instancePtr->removeContactData(id, FilterFavorites);

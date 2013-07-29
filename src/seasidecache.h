@@ -170,6 +170,9 @@ public:
     static ContactIdType apiId(quint32 iid);
 
     static bool validId(const ContactIdType &id);
+#ifndef USING_QTPIM
+    static bool validId(const QContactId &id);
+#endif
 
     static quint32 internalId(const QContact &contact);
     static quint32 internalId(const QContactId &id);
@@ -191,7 +194,9 @@ public:
     static int contactId(const QContact &contact);
 
     static CacheItem *existingItem(const ContactIdType &id);
+#ifdef USING_QTPIM
     static CacheItem *existingItem(quint32 iid);
+#endif
     static CacheItem *itemById(const ContactIdType &id);
 #ifdef USING_QTPIM
     static CacheItem *itemById(int id);
