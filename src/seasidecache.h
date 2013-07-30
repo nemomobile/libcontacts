@@ -35,6 +35,7 @@
 #include "contactcacheexport.h"
 
 #include <qtcontacts-extensions.h>
+#include <QContactStatusFlags>
 
 #include <QContact>
 #include <QContactManager>
@@ -126,7 +127,9 @@ public:
     struct CacheItem
     {
         CacheItem() : itemData(0), modelData(0), iid(0), contactState(ContactAbsent) {}
-        CacheItem(const QContact &contact) : contact(contact), itemData(0), modelData(0), iid(internalId(contact)), contactState(ContactAbsent) {}
+        CacheItem(const QContact &contact)
+            : contact(contact), itemData(0), modelData(0), iid(internalId(contact)),
+              statusFlags(contact.detail<QContactStatusFlags>().flagsValue()), contactState(ContactAbsent) {}
 
         ContactIdType apiId() const { return SeasideCache::apiId(contact); }
 
@@ -134,6 +137,7 @@ public:
         ItemData *itemData;
         ModelData *modelData;
         quint32 iid;
+        quint64 statusFlags;
         ContactState contactState;
     };
 

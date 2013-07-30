@@ -34,6 +34,8 @@
 #include "synchronizelists.h"
 #include "normalization_p.h"
 
+#include "qcontactstatusflags_impl.h"
+
 #include <QCoreApplication>
 #ifdef USING_QTPIM
 #include <QStandardPaths>
@@ -1116,6 +1118,7 @@ void SeasideCache::contactsAvailable()
             } else {
                 item.contact = contact;
             }
+            item.statusFlags = contact.detail<QContactStatusFlags>().flagsValue();
             item.contactState = ContactFetched;
 
              QList<QContactPhoneNumber> phoneNumbers = contact.details<QContactPhoneNumber>();
@@ -1323,6 +1326,7 @@ void SeasideCache::appendContacts(const QList<QContact> &contacts)
                 cacheIds.append(apiId);
                 CacheItem &cacheItem = m_people[iid];
                 cacheItem.contact = contact;
+                cacheItem.statusFlags = contact.detail<QContactStatusFlags>().flagsValue();
                 cacheItem.contactState = ContactFetched;
 
                 if (m_fetchFilter == FilterAll)
