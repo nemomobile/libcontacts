@@ -132,7 +132,7 @@ QString managerName()
 typedef QList<DetailTypeId> DetailList;
 
 template<typename T>
-DetailList::value_type detailType()
+DetailTypeId detailType()
 {
 #ifdef USING_QTPIM
     return T::Type;
@@ -141,7 +141,7 @@ DetailList::value_type detailType()
 #endif
 }
 
-DetailList::value_type detailType(const QContactDetail &detail)
+DetailTypeId detailType(const QContactDetail &detail)
 {
 #ifdef USING_QTPIM
     return detail.type();
@@ -157,6 +157,24 @@ void setDetailType(Filter &filter, Field field)
     filter.setDetailType(T::Type, field);
 #else
     filter.setDetailDefinitionName(T::DefinitionName, field);
+#endif
+}
+
+DetailList detailTypesHint(const QContactFetchHint &hint)
+{
+#ifdef USING_QTPIM
+    return hint.detailTypesHint();
+#else
+    return hint.detailDefinitionsHint();
+#endif
+}
+
+void setDetailTypesHint(QContactFetchHint &hint, const DetailList &types)
+{
+#ifdef USING_QTPIM
+    hint.setDetailTypesHint(types);
+#else
+    hint.setDetailDefinitionsHint(types);
 #endif
 }
 
@@ -195,7 +213,7 @@ QContactFetchHint metadataFetchHint(quint32 fetchTypes = 0)
         types << detailType<QContactEmailAddress>();
     }
 
-    fetchHint.setDetailTypesHint(types);
+    setDetailTypesHint(fetchHint, types);
     return fetchHint;
 }
 
@@ -204,8 +222,7 @@ QContactFetchHint onlineFetchHint(quint32 fetchTypes = 0)
     QContactFetchHint fetchHint(metadataFetchHint(fetchTypes));
 
     // We also need global presence state
-    fetchHint.setDetailTypesHint(fetchHint.detailTypesHint() << detailType<QContactGlobalPresence>());
-
+    setDetailTypesHint(fetchHint, detailTypesHint(fetchHint) << detailType<QContactGlobalPresence>());
     return fetchHint;
 }
 
@@ -214,8 +231,7 @@ QContactFetchHint favoriteFetchHint(quint32 fetchTypes = 0)
     QContactFetchHint fetchHint(onlineFetchHint(fetchTypes));
 
     // We also need avatar info
-    fetchHint.setDetailTypesHint(fetchHint.detailTypesHint() << detailType<QContactAvatar>());
-
+    setDetailTypesHint(fetchHint, detailTypesHint(fetchHint) << detailType<QContactAvatar>());
     return fetchHint;
 }
 
@@ -1373,13 +1389,7 @@ void SeasideCache::contactsAvailable()
     }
 
     QSet<DetailTypeId> queryDetailTypes;
-    foreach (const DetailTypeId &typeId,
-#ifdef USING_QTPIM
-             fetchHint.detailTypesHint()
-#else
-             fetchHint.detailDefinitionsHint()
-#endif
-             ) {
+    foreach (const DetailTypeId &typeId, detailTypesHint(fetchHint)) {
         queryDetailTypes.insert(typeId);
     }
     const bool partialFetch = !queryDetailTypes.isEmpty();

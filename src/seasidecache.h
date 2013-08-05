@@ -70,7 +70,7 @@ USE_CONTACTS_NAMESPACE
 #ifdef USING_QTPIM
 typedef QContactDetail::DetailType DetailTypeId;
 #else
-typedef QLatin1String DetailTypeId;
+typedef QString DetailTypeId;
 #endif
 
 class CONTACTCACHE_EXPORT SeasideNameGroupChangeListener
