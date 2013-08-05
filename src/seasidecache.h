@@ -67,6 +67,12 @@
 
 USE_CONTACTS_NAMESPACE
 
+#ifdef USING_QTPIM
+typedef QContactDetail::DetailType DetailTypeId;
+#else
+typedef QLatin1String DetailTypeId;
+#endif
+
 class CONTACTCACHE_EXPORT SeasideNameGroupChangeListener
 {
 public:
@@ -90,6 +96,13 @@ public:
         FilterTypesCount
     };
 
+    enum FetchDataType {
+        FetchNone = 0,
+        FetchAccountUri = (1 << 0),
+        FetchPhoneNumber = (1 << 1),
+        FetchEmailAddress = (1 << 2)
+    };
+
     enum DisplayLabelOrder {
         FirstNameFirst,
         LastNameFirst
@@ -97,8 +110,9 @@ public:
 
     enum ContactState {
         ContactAbsent,
+        ContactPartial,
         ContactRequested,
-        ContactFetched
+        ContactComplete
     };
 
     struct ItemData
@@ -108,7 +122,7 @@ public:
         virtual QString getDisplayLabel() const = 0;
         virtual void displayLabelOrderChanged(DisplayLabelOrder order) = 0;
 
-        virtual void updateContact(const QContact &newContact, QContact *oldContact) = 0;
+        virtual void updateContact(const QContact &newContact, QContact *oldContact, ContactState state) = 0;
 
         virtual void constituentsFetched(const QList<int> &ids) = 0;
         virtual void mergeCandidatesFetched(const QList<int> &ids) = 0;
@@ -121,7 +135,7 @@ public:
     {
         virtual ~ModelData() {}
 
-        virtual void contactChanged(const QContact &newContact) = 0;
+        virtual void contactChanged(const QContact &newContact, ContactState state) = 0;
     };
 
     struct CacheItem
@@ -168,6 +182,13 @@ public:
         virtual void updateDisplayLabelOrder() = 0;
     };
 
+    struct ResolveListener
+    {
+        virtual ~ResolveListener() {}
+
+        virtual void addressResolved(CacheItem *item) = 0;
+    };
+
     static SeasideCache *instance();
 
     static ContactIdType apiId(const QContact &contact);
@@ -184,7 +205,7 @@ public:
     static quint32 internalId(QContactLocalId id);
 #endif
 
-    static void registerModel(ListModel *model, FilterType type);
+    static void registerModel(ListModel *model, FilterType type, FetchDataType extraData = FetchNone);
     static void unregisterModel(ListModel *model);
 
     static void registerUser(QObject *user);
@@ -201,18 +222,27 @@ public:
 #ifdef USING_QTPIM
     static CacheItem *existingItem(quint32 iid);
 #endif
-    static CacheItem *itemById(const ContactIdType &id);
+    static CacheItem *itemById(const ContactIdType &id, bool requireComplete = true);
 #ifdef USING_QTPIM
-    static CacheItem *itemById(int id);
+    static CacheItem *itemById(int id, bool requireComplete = true);
 #endif
     static ContactIdType selfContactId();
     static QContact contactById(const ContactIdType &id);
+
+    static void ensureCompletion(CacheItem *cacheItem);
+
     static QChar nameGroupForCacheItem(CacheItem *cacheItem);
     static QList<QChar> allNameGroups();
     static QHash<QChar, QSet<quint32> > nameGroupMembers();
 
-    static CacheItem *itemByPhoneNumber(const QString &msisdn);
-    static CacheItem *itemByEmailAddress(const QString &email);
+    static CacheItem *itemByPhoneNumber(const QString &number, bool requireComplete = true);
+    static CacheItem *itemByEmailAddress(const QString &address, bool requireComplete = true);
+    static CacheItem *itemByOnlineAccount(const QString &localUid, const QString &remoteUid, bool requireComplete = true);
+
+    static CacheItem *resolvePhoneNumber(ResolveListener *listener, const QString &number, bool requireComplete = true);
+    static CacheItem *resolveEmailAddress(ResolveListener *listener, const QString &address, bool requireComplete = true);
+    static CacheItem *resolveOnlineAccount(ResolveListener *listener, const QString &localUid, const QString &remoteUid, bool requireComplete = true);
+
     static bool saveContact(const QContact &contact);
     static bool removeContact(const QContact &contact);
 
@@ -235,8 +265,8 @@ public:
 
     // For synchronizeLists()
     int insertRange(int index, int count, const QList<ContactIdType> &source, int sourceIndex) {
-        return insertRange(m_fetchFilter, index, count, source, sourceIndex); }
-    int removeRange(int index, int count) { removeRange(m_fetchFilter, index, count); return 0; }
+        return insertRange(m_syncFilter, index, count, source, sourceIndex); }
+    int removeRange(int index, int count) { removeRange(m_syncFilter, index, count); return 0; }
 
 protected:
     void timerEvent(QTimerEvent *event);
@@ -260,17 +290,30 @@ private slots:
     void displayLabelOrderChanged();
 
 private:
+    enum PopulateProgress {
+        Unpopulated,
+        FetchFavorites,
+        FetchMetadata,
+        FetchOnline,
+        Populated,
+        RefetchFavorites,
+        RefetchOthers
+    };
+
     SeasideCache();
     ~SeasideCache();
 
     static void checkForExpiry();
 
-    void keepPopulated();
+    void keepPopulated(quint32 fetchTypes);
 
     void requestUpdate();
-    void appendContacts(const QList<QContact> &contacts);
+    void appendContacts(const QList<QContact> &contacts, FilterType filterType, bool partialFetch);
     void fetchContacts();
     void updateContacts(const QList<ContactIdType> &contactIds);
+
+    bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes);
+    void updateCache(CacheItem *item, const QContact &contact, bool partialFetch);
 
     void finalizeUpdate(FilterType filter);
     void removeRange(FilterType filter, int index, int count);
@@ -281,7 +324,8 @@ private:
             const QList<ContactIdType> &queryIds,
             int queryIndex);
 
-    void updateContactData(const ContactIdType &contactId, FilterType filter);
+    void contactDataChanged(const ContactIdType &contactId);
+    void contactDataChanged(const ContactIdType &contactId, FilterType filter);
     void removeContactData(const ContactIdType &contactId, FilterType filter);
     void makePopulated(FilterType filter);
 
@@ -292,6 +336,8 @@ private:
     void updateConstituentAggregations(const ContactIdType &contactId);
     void completeContactAggregation(const ContactIdType &contact1Id, const ContactIdType &contact2Id);
 
+    void resolveAddress(ResolveListener *listener, const QString &first, const QString &second, bool requireComplete);
+
     static QContactRelationship makeRelationship(const QString &type, const QContact &contact1, const QContact &contact2);
 
     QBasicTimer m_expiryTimer;
@@ -299,6 +345,7 @@ private:
     QHash<quint32, CacheItem> m_people;
     QHash<QString, quint32> m_phoneNumberIds;
     QHash<QString, quint32> m_emailAddressIds;
+    QHash<QPair<QString, QString>, quint32> m_onlineAccountIds;
     QHash<ContactIdType, QContact> m_contactsToSave;
     QHash<QChar, QSet<quint32> > m_contactNameGroups;
     QList<QContact> m_contactsToCreate;
@@ -335,15 +382,26 @@ private:
     int m_cacheIndex;
     int m_queryIndex;
     int m_appendIndex;
-    FilterType m_fetchFilter;
+    FilterType m_syncFilter;
     DisplayLabelOrder m_displayLabelOrder;
     bool m_keepPopulated;
+    PopulateProgress m_populateProgress;
+    quint32 m_fetchTypes;
+    bool m_fetchTypesChanged;
     bool m_updatesPending;
-    bool m_fetchActive;
     bool m_refreshRequired;
     bool m_contactsUpdated;
     QList<ContactIdType> m_constituentIds;
     QList<ContactIdType> m_candidateIds;
+
+    struct ResolveData {
+        QString first;
+        QString second;
+        bool requireComplete;
+        ResolveListener *listener;
+    };
+    QList<ResolveData> m_resolveAddresses;
+    const ResolveData *m_activeResolve;
 
     QElapsedTimer m_timer;
     QElapsedTimer m_fetchPostponed;
