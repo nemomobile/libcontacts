@@ -1528,7 +1528,9 @@ void SeasideCache::displayLabelOrderChanged()
             } else {
                 QContactName name = it->contact.detail<QContactName>();
 #ifdef USING_QTPIM
-                name.setValue(QContactName__FieldCustomLabel, generateDisplayLabel(it->contact, displayLabelOrder()));
+                QString strTempName = generateDisplayLabel(it->contact, 
+                   SeasideCache::displayLabelOrder());
+                name.setValue(QContactName__FieldCustomLabel, strTempName);
 #else
                 name.setCustomLabel(generateDisplayLabel(it->contact, displayLabelOrder()));
 #endif
