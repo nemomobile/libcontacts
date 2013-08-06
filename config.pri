@@ -1,5 +1,4 @@
 include(package.pri)
-include(contacts-namespace.pri)
 
 CONFIG += qt link_pkgconfig
 QT -= gui
@@ -11,6 +10,7 @@ equals(QT_MAJOR_VERSION, 4) {
 }
 equals(QT_MAJOR_VERSION, 5) {
     PKGCONFIG += Qt5Contacts Qt5Versit qtcontacts-sqlite-qt5-extensions
+    DEFINES *= USING_QTPIM
 
     # Needed for qt4 moc, which can't handle numeric tests
     DEFINES *= QT_VERSION_5

@@ -37,7 +37,7 @@
 #include "qcontactstatusflags_impl.h"
 
 #include <QCoreApplication>
-#ifdef USING_QTPIM
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QStandardPaths>
 #else
 #include <QDesktopServices>
@@ -67,7 +67,9 @@
 
 #include <QtDebug>
 
-USE_VERSIT_NAMESPACE
+#ifdef USING_QTPIM
+QTVERSIT_USE_NAMESPACE
+#endif
 
 namespace {
 
@@ -485,6 +487,40 @@ void SeasideCache::unregisterNameGroupChangeListener(SeasideNameGroupChangeListe
     instancePtr->m_nameGroupChangeListeners.removeAll(listener);
 }
 
+void SeasideCache::registerChangeListener(ChangeListener *listener)
+{
+    if (!instancePtr)
+        new SeasideCache;
+    instancePtr->m_changeListeners.append(listener);
+}
+
+void SeasideCache::unregisterChangeListener(ChangeListener *listener)
+{
+    if (!instancePtr)
+        return;
+    instancePtr->m_changeListeners.removeAll(listener);
+}
+
+void SeasideCache::unregisterResolveListener(ResolveListener *listener)
+{
+    if (!instancePtr)
+        return;
+
+    // We might have outstanding resolve requests for this listener
+    if (instancePtr->m_activeResolve && (instancePtr->m_activeResolve->listener == listener)) {
+        instancePtr->m_activeResolve = 0;
+    }
+
+    QList<ResolveData>::iterator it = instancePtr->m_resolveAddresses.begin();
+    for ( ; it != instancePtr->m_resolveAddresses.end(); ) {
+        if (it->listener == listener) {
+            it = instancePtr->m_resolveAddresses.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 QChar SeasideCache::nameGroupForCacheItem(CacheItem *cacheItem)
 {
     if (!cacheItem)
@@ -666,6 +702,8 @@ SeasideCache::CacheItem *SeasideCache::resolvePhoneNumber(ResolveListener *liste
     CacheItem *item = itemByPhoneNumber(number, requireComplete);
     if (!item) {
         instancePtr->resolveAddress(listener, QString(), number, requireComplete);
+    } else if (requireComplete) {
+        ensureCompletion(item);
     }
 
     return item;
@@ -676,6 +714,8 @@ SeasideCache::CacheItem *SeasideCache::resolveEmailAddress(ResolveListener *list
     CacheItem *item = itemByEmailAddress(address, requireComplete);
     if (!item) {
         instancePtr->resolveAddress(listener, address, QString(), requireComplete);
+    } else if (requireComplete) {
+        ensureCompletion(item);
     }
     return item;
 }
@@ -685,6 +725,8 @@ SeasideCache::CacheItem *SeasideCache::resolveOnlineAccount(ResolveListener *lis
     CacheItem *item = itemByOnlineAccount(localUid, remoteUid, requireComplete);
     if (!item) {
         instancePtr->resolveAddress(listener, localUid, remoteUid, requireComplete);
+    } else if (requireComplete) {
+        ensureCompletion(item);
     }
     return item;
 }
@@ -1131,7 +1173,7 @@ bool SeasideCache::event(QEvent *event)
             remoteFilter.setMatchFlags(QContactFilter::MatchExactly | QContactFilter::MatchFixedString); // allow case insensitive
             remoteFilter.setValue(resolve.second);
 
-            m_fetchRequest.setFilter(localFilter | remoteFilter);
+            m_fetchRequest.setFilter(localFilter & remoteFilter);
         }
 
         // If completion is not required, we need to at least retrieve as much detail
@@ -1207,22 +1249,30 @@ void SeasideCache::contactsChanged(const QList<ContactIdType> &ids)
 
 void SeasideCache::contactsRemoved(const QList<ContactIdType> &ids)
 {
-    if (m_keepPopulated) {
-        m_refreshRequired = true;
-        requestUpdate();
-    } else {
-        // Remove these contacts if they're already in the cache
-        bool present = false;
-        foreach (const ContactIdType &id, ids) {
-            if (existingItem(id)) {
-                present = true;
-                m_expiredContacts[id] += -1;
+    QList<ContactIdType> presentIds;
+
+    foreach (const ContactIdType &id, ids) {
+        if (CacheItem *item = existingItem(id)) {
+            // Report this item is about to be removed
+            foreach (ChangeListener *listener, m_changeListeners) {
+                listener->itemAboutToBeRemoved(item);
+            }
+            if (!m_keepPopulated) {
+                presentIds.append(id);
             }
         }
-        if (present) {
-            requestUpdate();
+    }
+
+    if (m_keepPopulated) {
+        m_refreshRequired = true;
+    } else {
+        // Remove these contacts if they're already in the cache; they won't be removed by syncing
+        foreach (const ContactIdType &id, presentIds) {
+            m_expiredContacts[id] += -1;
         }
     }
+
+    requestUpdate();
 }
 
 void SeasideCache::updateContacts()
@@ -1272,6 +1322,10 @@ void SeasideCache::updateContacts(const QList<ContactIdType> &contactIds)
     if (!contactIds.isEmpty()) {
         m_contactsUpdated = true;
         m_changedContacts.append(contactIds);
+
+        foreach (const ContactIdType &id, contactIds) {
+            m_reportIds.insert(internalId(id));
+        }
 
         if (m_fetchPostponed.isValid()) {
             // We are waiting to accumulate further changes
@@ -1470,6 +1524,15 @@ void SeasideCache::contactsAvailable()
 
             if (roleDataChanged) {
                 instancePtr->contactDataChanged(apiId);
+            }
+
+            if (m_reportIds.contains(item->iid)) {
+                m_reportIds.remove(item->iid);
+
+                // Report the change to this contact
+                foreach (ChangeListener *listener, m_changeListeners) {
+                    listener->itemUpdated(item);
+                }
             }
         }
         m_resultsRead = contacts.count();
@@ -1837,7 +1900,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
                 if (!m_fetchRequest.contacts().isEmpty()) {
                     item = itemById(apiId(m_fetchRequest.contacts().first()), false);
                 }
-                m_activeResolve->listener->addressResolved(item);
+                m_activeResolve->listener->addressResolved(m_activeResolve->first, m_activeResolve->second, item);
 
                 m_activeResolve = 0;
                 m_resolveAddresses.takeFirst();

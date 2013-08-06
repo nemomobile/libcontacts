@@ -65,11 +65,13 @@
 #include <mgconfitem.h>
 #endif
 
-USE_CONTACTS_NAMESPACE
-
 #ifdef USING_QTPIM
+QTCONTACTS_USE_NAMESPACE
+
 typedef QContactDetail::DetailType DetailTypeId;
 #else
+QTM_USE_NAMESPACE
+
 typedef QString DetailTypeId;
 #endif
 
@@ -186,7 +188,15 @@ public:
     {
         virtual ~ResolveListener() {}
 
-        virtual void addressResolved(CacheItem *item) = 0;
+        virtual void addressResolved(const QString &first, const QString &second, CacheItem *item) = 0;
+    };
+
+    struct ChangeListener
+    {
+        virtual ~ChangeListener() {}
+
+        virtual void itemUpdated(CacheItem *item) = 0;
+        virtual void itemAboutToBeRemoved(CacheItem *item) = 0;
     };
 
     static SeasideCache *instance();
@@ -213,6 +223,11 @@ public:
 
     static void registerNameGroupChangeListener(SeasideNameGroupChangeListener *listener);
     static void unregisterNameGroupChangeListener(SeasideNameGroupChangeListener *listener);
+
+    static void registerChangeListener(ChangeListener *listener);
+    static void unregisterChangeListener(ChangeListener *listener);
+
+    static void unregisterResolveListener(ResolveListener *listener);
 
     static DisplayLabelOrder displayLabelOrder();
 
@@ -357,6 +372,7 @@ private:
     QList<QContactRelationship> m_relationshipsToSave;
     QList<QContactRelationship> m_relationshipsToRemove;
     QList<SeasideNameGroupChangeListener*> m_nameGroupChangeListeners;
+    QList<ChangeListener*> m_changeListeners;
     QVector<ContactIdType> m_contacts[FilterTypesCount];
     QList<ListModel *> m_models[FilterTypesCount];
     QSet<QObject *> m_users;
@@ -393,6 +409,7 @@ private:
     bool m_contactsUpdated;
     QList<ContactIdType> m_constituentIds;
     QList<ContactIdType> m_candidateIds;
+    QSet<quint32> m_reportIds;
 
     struct ResolveData {
         QString first;
