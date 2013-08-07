@@ -259,8 +259,7 @@ QContactFilter nonfavoriteFilter()
 
 QContactFilter onlineFilter()
 {
-    // Where presence is available
-    return QContactGlobalPresence::match(QContactPresence::PresenceAvailable);
+    return QContactStatusFlags::matchFlag(QContactStatusFlags::IsOnline);
 }
 
 QContactFilter aggregateFilter()
