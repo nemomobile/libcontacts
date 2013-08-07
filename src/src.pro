@@ -43,11 +43,13 @@ HEADERS += \
     $$PWD/normalization_p.h \
     $$PWD/contactcacheexport.h \
     $$PWD/seasidecache.h \
-    $$PWD/synchronizelists.h
+    $$PWD/synchronizelists.h \
+    $$PWD/seasidenamegrouper.h
 
 headers.files = \
     $$PWD/contactcacheexport.h \
     $$PWD/seasidecache.h \
-    $$PWD/synchronizelists.h
+    $$PWD/synchronizelists.h \
+    $$PWD/seasidenamegrouper.h
 headers.path = $$PREFIX/include/$$TARGET
 INSTALLS += headers

@@ -521,10 +521,35 @@ void SeasideCache::unregisterResolveListener(ResolveListener *listener)
     }
 }
 
+void SeasideCache::setNameGrouper(SeasideNameGrouper *grouper)
+{
+    if (!instancePtr)
+        new SeasideCache;
+    instancePtr->m_nameGrouper.reset(grouper);
+
+    allContactNameGroups = getAllContactNameGroups();
+    QList<QChar> groups = instancePtr->m_nameGrouper->allNameGroups();
+    for (int i = groups.count() - 1; i > -1; --i) {
+        const QChar &group = groups.at(i);
+        if (!allContactNameGroups.contains(group))
+            allContactNameGroups.prepend(group);
+    }
+}
+
 QChar SeasideCache::nameGroupForCacheItem(CacheItem *cacheItem)
 {
     if (!cacheItem)
         return QChar();
+
+    if (!instancePtr)
+        new SeasideCache;
+
+    if (!instancePtr->m_nameGrouper.isNull()) {
+        SeasideNameGrouper::DisplayLabelOrder order = (SeasideNameGrouper::DisplayLabelOrder)(int)SeasideCache::displayLabelOrder();
+        QChar group = instancePtr->m_nameGrouper->nameGroupForContact(cacheItem->contact, order);
+        if (!group.isNull())
+            return group;
+    }
 
     QChar group;
     QString first;

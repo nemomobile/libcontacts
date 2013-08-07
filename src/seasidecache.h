@@ -33,6 +33,7 @@
 #define SEASIDECACHE_H
 
 #include "contactcacheexport.h"
+#include "seasidenamegrouper.h"
 
 #include <qtcontacts-extensions.h>
 #include <QContactStatusFlags>
@@ -106,8 +107,8 @@ public:
     };
 
     enum DisplayLabelOrder {
-        FirstNameFirst,
-        LastNameFirst
+        FirstNameFirst = SeasideNameGrouper::FirstNameFirst,
+        LastNameFirst = SeasideNameGrouper::LastNameFirst
     };
 
     enum ContactState {
@@ -228,6 +229,8 @@ public:
     static void unregisterChangeListener(ChangeListener *listener);
 
     static void unregisterResolveListener(ResolveListener *listener);
+
+    static void setNameGrouper(SeasideNameGrouper *grouper);
 
     static DisplayLabelOrder displayLabelOrder();
 
@@ -371,6 +374,7 @@ private:
     QList<QPair<ContactLinkRequest, ContactLinkRequest> > m_contactPairsToLink;
     QList<QContactRelationship> m_relationshipsToSave;
     QList<QContactRelationship> m_relationshipsToRemove;
+    QScopedPointer<SeasideNameGrouper> m_nameGrouper;
     QList<SeasideNameGroupChangeListener*> m_nameGroupChangeListeners;
     QList<ChangeListener*> m_changeListeners;
     QVector<ContactIdType> m_contacts[FilterTypesCount];
