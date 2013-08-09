@@ -134,28 +134,60 @@ public:
         virtual QList<int> constituents() const = 0;
     };
 
-    struct ModelData
+    struct CacheItem;
+    struct ItemListener
     {
-        virtual ~ModelData() {}
+        ItemListener() : next(0), key(0) {}
+        virtual ~ItemListener() {}
 
-        virtual void contactChanged(const QContact &newContact, ContactState state) = 0;
+        virtual void itemUpdated(CacheItem *item) = 0;
+        virtual void itemAboutToBeRemoved(CacheItem *item) = 0;
+
+        ItemListener *next;
+        void *key;
     };
 
     struct CacheItem
     {
-        CacheItem() : itemData(0), modelData(0), iid(0), contactState(ContactAbsent) {}
+        CacheItem() : itemData(0), iid(0), contactState(ContactAbsent), listeners(0) {}
         CacheItem(const QContact &contact)
-            : contact(contact), itemData(0), modelData(0), iid(internalId(contact)),
-              statusFlags(contact.detail<QContactStatusFlags>().flagsValue()), contactState(ContactAbsent) {}
+            : contact(contact), itemData(0), iid(internalId(contact)),
+              statusFlags(contact.detail<QContactStatusFlags>().flagsValue()), contactState(ContactAbsent), listeners(0) {}
 
         ContactIdType apiId() const { return SeasideCache::apiId(contact); }
 
+        ItemListener *appendListener(ItemListener *listener, void *key)
+        {
+            if (listeners) {
+                ItemListener *existing(listeners);
+                while (existing->next) {
+                    existing = existing->next;
+                }
+                existing->next = listener;
+            } else {
+                listeners = listener;
+            }
+
+            listener->next = 0;
+            listener->key = key;
+            return listener;
+        }
+
+        ItemListener *listener(void *key)
+        {
+            ItemListener *l(listeners);
+            while (l && (l->key != key) && (l->next)) {
+                l = l->next;
+            }
+            return (l && (l->key == key)) ? l : 0;
+        }
+
         QContact contact;
         ItemData *itemData;
-        ModelData *modelData;
         quint32 iid;
         quint64 statusFlags;
         ContactState contactState;
+        ItemListener *listeners;
     };
 
     struct ContactLinkRequest

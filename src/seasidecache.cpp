@@ -1227,7 +1227,6 @@ bool SeasideCache::event(QEvent *event)
             QHash<quint32, CacheItem>::iterator cacheItem = m_people.find(iid);
             if (cacheItem != m_people.end()) {
                 delete cacheItem->itemData;
-                delete cacheItem->modelData;
                 m_people.erase(cacheItem);
             }
         }
@@ -1281,6 +1280,15 @@ void SeasideCache::contactsRemoved(const QList<ContactIdType> &ids)
             foreach (ChangeListener *listener, m_changeListeners) {
                 listener->itemAboutToBeRemoved(item);
             }
+
+            ItemListener *listener = item->listeners;
+            while (listener) {
+                ItemListener *next = listener->next;
+                listener->itemAboutToBeRemoved(item);
+                listener = next;
+            }
+            item->listeners = 0;
+
             if (!m_keepPopulated) {
                 presentIds.append(id);
             }
@@ -1376,9 +1384,13 @@ void SeasideCache::updateCache(CacheItem *item, const QContact &contact, bool pa
     }
 
     item->statusFlags = contact.detail<QContactStatusFlags>().flagsValue();
-    if (item->modelData) {
-        item->modelData->contactChanged(contact, item->contactState);
+
+    ItemListener *listener = item->listeners;
+    while (listener) {
+        listener->itemUpdated(item);
+        listener = listener->next;
     }
+
     if (item->itemData) {
         item->itemData->updateContact(contact, &item->contact, item->contactState);
     } else {

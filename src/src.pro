@@ -10,7 +10,7 @@ target.path = $$PREFIX/lib
 INSTALLS += target
 
 # set version for generated pkgconfig files
-VERSION=0.0.7
+VERSION=0.0.9
 QMAKE_PKGCONFIG_INCDIR = $$PREFIX/include/$${PACKAGENAME}
 QMAKE_PKGCONFIG_LIBDIR = $$PREFIX/lib
 QMAKE_PKGCONFIG_DESTDIR = pkgconfig
