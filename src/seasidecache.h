@@ -86,6 +86,8 @@ public:
         FilterAll,
         FilterFavorites,
         FilterOnline,
+        FilterEmail,
+        FilterPhoneNumber,
         FilterTypesCount
     };
 

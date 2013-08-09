@@ -516,6 +516,8 @@ bool SeasideCache::saveContact(const QContact &contact)
         instancePtr->updateContactData(id, FilterFavorites);
         instancePtr->updateContactData(id, FilterOnline);
         instancePtr->updateContactData(id, FilterAll);
+        instancePtr->updateContactData(id, FilterEmail);
+        instancePtr->updateContactData(id, FilterPhoneNumber);
     } else {
         instancePtr->m_contactsToCreate.append(contact);
     }
@@ -546,6 +548,8 @@ bool SeasideCache::removeContact(const QContact &contact)
     instancePtr->removeContactData(id, FilterFavorites);
     instancePtr->removeContactData(id, FilterOnline);
     instancePtr->removeContactData(id, FilterAll);
+    instancePtr->removeContactData(id, FilterEmail);
+    instancePtr->removeContactData(id, FilterPhoneNumber);
 
     instancePtr->requestUpdate();
     return true;
@@ -1058,6 +1062,8 @@ void SeasideCache::contactsAvailable()
     }
 
     if (m_fetchFilter == FilterFavorites
+             || m_fetchFilter == FilterEmail
+             || m_fetchFilter == FilterPhoneNumber
             || m_fetchFilter == FilterOnline
             || m_fetchFilter == FilterAll) {
         // Part of an initial query.
@@ -1129,6 +1135,8 @@ void SeasideCache::contactsAvailable()
                 instancePtr->updateContactData(apiId, FilterFavorites);
                 instancePtr->updateContactData(apiId, FilterOnline);
                 instancePtr->updateContactData(apiId, FilterAll);
+                instancePtr->updateContactData(apiId, FilterEmail);
+                instancePtr->updateContactData(apiId, FilterPhoneNumber);
              }
         }
         m_resultsRead = contacts.count();
@@ -1279,7 +1287,6 @@ int SeasideCache::insertRange(
         models[i]->sourceItemsInserted(index, end);
 
     notifyNameGroupsChanged(modifiedNameGroups);
-
     return end - index + 1;
 }
 
@@ -1429,16 +1436,43 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
 
     if (m_fetchFilter == FilterFavorites) {
         // Next, query for all contacts
-        m_fetchFilter = FilterAll;
+        m_fetchFilter = FilterEmail;
 
         if (!isPopulated(FilterFavorites)) {
-            qDebug() << "Favorites queried in" << m_timer.elapsed() << "ms";
             m_appendIndex = 0;
-            m_fetchRequest.setFilter(QContactFilter());
+            m_fetchRequest.setFilter(QContactEmailAddress::match(""));
             m_fetchRequest.start();
             makePopulated(FilterFavorites);
         } else {
             finalizeUpdate(FilterFavorites);
+            m_contactIdRequest.setFilter(QContactEmailAddress::match(""));
+            m_contactIdRequest.start();
+        }
+    } else if (m_fetchFilter == FilterEmail) {
+        // Next, query for all contacts
+        m_fetchFilter = FilterPhoneNumber;
+
+        if (!isPopulated(FilterEmail)) {
+            m_appendIndex = 0;
+            m_fetchRequest.setFilter(QContactPhoneNumber::match("*"));
+            m_fetchRequest.start();
+            makePopulated(FilterEmail);
+        } else {
+            finalizeUpdate(FilterEmail);
+            m_contactIdRequest.setFilter(QContactPhoneNumber::match("*"));
+            m_contactIdRequest.start();
+        }
+    } else if (m_fetchFilter == FilterPhoneNumber) {
+        // Next, query for all contacts
+        m_fetchFilter = FilterAll;
+
+        if (!isPopulated(FilterPhoneNumber)) {
+            m_appendIndex = 0;
+            m_fetchRequest.setFilter(QContactFilter());
+            m_fetchRequest.start();
+            makePopulated(FilterPhoneNumber);
+        } else {
+            finalizeUpdate(FilterPhoneNumber);
             m_contactIdRequest.setFilter(QContactFilter());
             m_contactIdRequest.start();
         }
@@ -1447,7 +1481,6 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
         m_fetchFilter = FilterOnline;
 
         if (!isPopulated(FilterAll)) {
-            qDebug() << "All queried in" << m_timer.elapsed() << "ms";
             // Not correct, but better than nothing...
             m_appendIndex = 0;
             m_fetchRequest.setFilter(QContactGlobalPresence::match(QContactPresence::PresenceAvailable));
@@ -1467,7 +1500,6 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
         }
 
         if (!isPopulated(FilterOnline)) {
-            qDebug() << "Online queried in" << m_timer.elapsed() << "ms";
             m_fetchRequest.setFetchHint(QContactFetchHint());
             makePopulated(FilterOnline);
         } else {
