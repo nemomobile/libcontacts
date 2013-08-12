@@ -365,7 +365,6 @@ private:
     bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes);
     void updateCache(CacheItem *item, const QContact &contact, bool partialFetch);
 
-    void finalizeUpdate(FilterType filter);
     void removeRange(FilterType filter, int index, int count);
     int insertRange(
             FilterType filter,
