@@ -32,6 +32,8 @@
 #ifndef SEASIDENAMEGROUPER_H
 #define SEASIDENAMEGROUPER_H
 
+#include "contactcacheexport.h"
+
 #include <QChar>
 #include <QList>
 #include <QContact>
