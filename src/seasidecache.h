@@ -173,13 +173,32 @@ public:
             return listener;
         }
 
+        bool removeListener(ItemListener *listener)
+        {
+            if (listeners) {
+                ItemListener *existing(listeners);
+                ItemListener **previous = &listeners;
+
+                while (existing) {
+                    if (existing == listener) {
+                        *previous = listener->next;
+                        return true;
+                    }
+                    previous = &existing->next;
+                    existing = existing->next;
+                }
+            }
+
+            return false;
+        }
+
         ItemListener *listener(void *key)
         {
-            ItemListener *l(listeners);
-            while (l && (l->key != key) && (l->next)) {
-                l = l->next;
+            ItemListener *existing(listeners);
+            while (existing && (existing->key != key) && (existing->next)) {
+                existing = existing->next;
             }
-            return (l && (l->key == key)) ? l : 0;
+            return (existing && (existing->key == key)) ? existing : 0;
         }
 
         QContact contact;
