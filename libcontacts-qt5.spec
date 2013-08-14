@@ -5,7 +5,7 @@ Release:    1
 Group:      System/Libraries
 License:    BSD
 URL:        https://github.com/nemomobile/libcontacts
-Source0:    %{name}-%{version}.tar.bz2
+Source0:    %{name}-%{version}.tar.gz
 Requires:   qtcontacts-sqlite-qt5
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Test)
