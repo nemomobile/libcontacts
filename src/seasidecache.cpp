@@ -610,6 +610,12 @@ SeasideCache::DisplayLabelOrder SeasideCache::displayLabelOrder()
     return instancePtr->m_displayLabelOrder;
 }
 
+void SeasideCache::setDisplayLabelOrder(DisplayLabelOrder order)
+{
+    instancePtr->m_displayLabelOrder = order;
+    instancePtr->setSortOrder(order);
+}
+
 int SeasideCache::contactId(const QContact &contact)
 {
     quint32 internal = internalId(contact);

@@ -287,6 +287,7 @@ public:
     static void setNameGrouper(SeasideNameGrouper *grouper);
 
     static DisplayLabelOrder displayLabelOrder();
+    static void setDisplayLabelOrder(DisplayLabelOrder order);
 
     static int contactId(const QContact &contact);
 
