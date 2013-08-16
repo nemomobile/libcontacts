@@ -207,6 +207,7 @@ public:
         quint64 statusFlags;
         ContactState contactState;
         ItemListener *listeners;
+        QChar nameGroup;
     };
 
     struct ContactLinkRequest
@@ -231,6 +232,8 @@ public:
         virtual void sourceItemsInserted(int begin, int end) = 0;
 
         virtual void sourceDataChanged(int begin, int end) = 0;
+
+        virtual void sourceItemsChanged() = 0;
 
         virtual void makePopulated() = 0;
         virtual void updateDisplayLabelOrder() = 0;
@@ -300,7 +303,9 @@ public:
 
     static void ensureCompletion(CacheItem *cacheItem);
 
-    static QChar nameGroupForCacheItem(CacheItem *cacheItem);
+    static QChar nameGroup(const CacheItem *cacheItem);
+    static QChar determineNameGroup(const CacheItem *cacheItem);
+
     static QList<QChar> allNameGroups();
     static QHash<QChar, QSet<quint32> > nameGroupMembers();
 
@@ -397,9 +402,9 @@ private:
     void removeContactData(const ContactIdType &contactId, FilterType filter);
     void makePopulated(FilterType filter);
 
-    void addToContactNameGroup(quint32 iid, const QChar &group, QList<QChar> *modifiedGroups = 0);
-    void removeFromContactNameGroup(quint32 iid, const QChar &group, QList<QChar> *modifiedGroups = 0);
-    void notifyNameGroupsChanged(const QList<QChar> &groups);
+    void addToContactNameGroup(quint32 iid, const QChar &group, QSet<QChar> *modifiedGroups = 0);
+    void removeFromContactNameGroup(quint32 iid, const QChar &group, QSet<QChar> *modifiedGroups = 0);
+    void notifyNameGroupsChanged(const QSet<QChar> &groups);
 
     void updateConstituentAggregations(const ContactIdType &contactId);
     void completeContactAggregation(const ContactIdType &contact1Id, const ContactIdType &contact2Id);
