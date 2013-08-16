@@ -893,7 +893,7 @@ QString SeasideCache::generateDisplayLabel(const QContact &contact, DisplayLabel
 #else
     QString customLabel = name.customLabel();
 #endif
-    if (!customLabel.isNull())
+    if (!customLabel.isEmpty())
         return customLabel;
 
     QString displayLabel;
@@ -908,10 +908,10 @@ QString SeasideCache::generateDisplayLabel(const QContact &contact, DisplayLabel
         nameStr2 = name.lastName();
     }
 
-    if (!nameStr1.isNull())
+    if (!nameStr1.isEmpty())
         displayLabel.append(nameStr1);
 
-    if (!nameStr2.isNull()) {
+    if (!nameStr2.isEmpty()) {
         if (!displayLabel.isEmpty())
             displayLabel.append(" ");
         displayLabel.append(nameStr2);
@@ -921,7 +921,14 @@ QString SeasideCache::generateDisplayLabel(const QContact &contact, DisplayLabel
         return displayLabel;
     }
 
+    // Try to generate a label from the contact details, in our preferred order
     displayLabel = generateDisplayLabelFromNonNameDetails(contact);
+    if (!displayLabel.isEmpty()) {
+        return displayLabel;
+    }
+
+    // If no label was determined from any of the available detail, fallback to the backend's label
+    displayLabel = contact.detail<QContactDisplayLabel>().label();
     if (!displayLabel.isEmpty()) {
         return displayLabel;
     }
@@ -932,42 +939,43 @@ QString SeasideCache::generateDisplayLabel(const QContact &contact, DisplayLabel
 QString SeasideCache::generateDisplayLabelFromNonNameDetails(const QContact &contact)
 {
     foreach (const QContactNickname& nickname, contact.details<QContactNickname>()) {
-        if (!nickname.nickname().isNull()) {
+        if (!nickname.nickname().isEmpty()) {
             return nickname.nickname();
         }
     }
 
     foreach (const QContactGlobalPresence& gp, contact.details<QContactGlobalPresence>()) {
         // should only be one of these, but qtct is strange, and doesn't list it as a unique detail in the schema...
-        if (!gp.nickname().isNull()) {
+        if (!gp.nickname().isEmpty()) {
             return gp.nickname();
         }
     }
 
     foreach (const QContactPresence& presence, contact.details<QContactPresence>()) {
-        if (!presence.nickname().isNull()) {
+        if (!presence.nickname().isEmpty()) {
             return presence.nickname();
         }
     }
 
     foreach (const QContactOnlineAccount& account, contact.details<QContactOnlineAccount>()) {
-        if (!account.accountUri().isNull()) {
+        if (!account.accountUri().isEmpty()) {
             return account.accountUri();
         }
     }
 
     foreach (const QContactEmailAddress& email, contact.details<QContactEmailAddress>()) {
-        if (!email.emailAddress().isNull()) {
+        if (!email.emailAddress().isEmpty()) {
             return email.emailAddress();
         }
     }
 
     QContactOrganization company = contact.detail<QContactOrganization>();
-    if (!company.name().isNull())
+    if (!company.name().isEmpty()) {
         return company.name();
+    }
 
     foreach (const QContactPhoneNumber& phone, contact.details<QContactPhoneNumber>()) {
-        if (!phone.number().isNull())
+        if (!phone.number().isEmpty())
             return phone.number();
     }
 
