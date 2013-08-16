@@ -4,6 +4,10 @@ TEMPLATE = lib
 CONFIG += qt hide_symbols
 CONFIG += create_pc create_prl no_install_prl
 
+isEmpty(PREFIX) {
+ PREFIX = /usr
+}
+
 # 'contacts' is too generic for the target name - use 'contactcache'
 TARGET = $${PACKAGENAME}
 target.path = $$PREFIX/lib
