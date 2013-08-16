@@ -574,7 +574,7 @@ QChar SeasideCache::determineNameGroup(const CacheItem *cacheItem)
     } else {
         QString displayLabel = (cacheItem->itemData)
                 ? cacheItem->itemData->getDisplayLabel()
-                : generateDisplayLabel(cacheItem->contact);
+                : generateDisplayLabel(cacheItem->contact, instancePtr->m_displayLabelOrder);
         if (!displayLabel.isEmpty())
             group = displayLabel[0].toUpper();
     }
@@ -2012,9 +2012,9 @@ void SeasideCache::displayLabelOrderChanged()
             } else {
                 QContactName name = it->contact.detail<QContactName>();
 #ifdef USING_QTPIM
-                name.setValue(QContactName__FieldCustomLabel, generateDisplayLabel(it->contact));
+                name.setValue(QContactName__FieldCustomLabel, generateDisplayLabel(it->contact, m_displayLabelOrder));
 #else
-                name.setCustomLabel(generateDisplayLabel(it->contact));
+                name.setCustomLabel(generateDisplayLabel(it->contact, m_displayLabelOrder));
 #endif
                 it->contact.saveDetail(&name);
             }

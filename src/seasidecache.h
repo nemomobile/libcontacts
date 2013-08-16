@@ -333,7 +333,7 @@ public:
     static const QVector<ContactIdType> *contacts(FilterType filterType);
     static bool isPopulated(FilterType filterType);
 
-    static QString generateDisplayLabel(const QContact &contact, DisplayLabelOrder order = FirstNameFirst);
+    static QString generateDisplayLabel(const QContact &contact, DisplayLabelOrder order);
     static QString generateDisplayLabelFromNonNameDetails(const QContact &contact);
 
     bool event(QEvent *event);
