@@ -96,6 +96,8 @@ public:
         FilterAll,
         FilterFavorites,
         FilterOnline,
+        FilterEmail,
+        FilterPhoneNumber,        
         FilterTypesCount
     };
 
@@ -370,9 +372,13 @@ private:
         FetchFavorites,
         FetchMetadata,
         FetchOnline,
+        FetchEmail,
+        FetchPhone,
         Populated,
         RefetchFavorites,
-        RefetchOthers
+        RefetchOthers,
+        RefetchEmail,
+        RefetchPhone,
     };
 
     SeasideCache();
