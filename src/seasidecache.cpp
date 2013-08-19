@@ -571,12 +571,8 @@ QChar SeasideCache::determineNameGroup(const CacheItem *cacheItem)
         group = first[0].toUpper();
     } else if (!last.isEmpty()) {
         group = last[0].toUpper();
-    } else {
-        QString displayLabel = (cacheItem->itemData)
-                ? cacheItem->itemData->getDisplayLabel()
-                : generateDisplayLabel(cacheItem->contact);
-        if (!displayLabel.isEmpty())
-            group = displayLabel[0].toUpper();
+    } else if (!cacheItem->displayLabel.isEmpty()) {
+        group = cacheItem->displayLabel[0].toUpper();
     }
 
     // XXX temporary workaround for non-latin names: use non-name details to try to find a
@@ -691,10 +687,15 @@ QContact SeasideCache::contactById(const ContactIdType &id)
 void SeasideCache::ensureCompletion(CacheItem *cacheItem)
 {
     if (cacheItem->contactState < ContactRequested) {
-        cacheItem->contactState = ContactRequested;
-        instancePtr->m_changedContacts.append(cacheItem->apiId());
-        instancePtr->fetchContacts();
+        refreshContact(cacheItem);
     }
+}
+
+void SeasideCache::refreshContact(CacheItem *cacheItem)
+{
+    cacheItem->contactState = ContactRequested;
+    instancePtr->m_changedContacts.append(cacheItem->apiId());
+    instancePtr->fetchContacts();
 }
 
 SeasideCache::CacheItem *SeasideCache::itemByPhoneNumber(const QString &number, bool requireComplete)
@@ -887,14 +888,6 @@ bool SeasideCache::isPopulated(FilterType filterType)
 QString SeasideCache::generateDisplayLabel(const QContact &contact, DisplayLabelOrder order)
 {
     QContactName name = contact.detail<QContactName>();
-
-#ifdef USING_QTPIM
-    QString customLabel = name.value<QString>(QContactName__FieldCustomLabel);
-#else
-    QString customLabel = name.customLabel();
-#endif
-    if (!customLabel.isEmpty())
-        return customLabel;
 
     QString displayLabel;
 
@@ -1422,6 +1415,7 @@ void SeasideCache::updateCache(CacheItem *item, const QContact &contact, bool pa
 
     // Check if the name group has changed
     item->nameGroup = determineNameGroup(item);
+    item->displayLabel = generateDisplayLabel(item->contact, m_displayLabelOrder);
 }
 
 bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes)
@@ -1535,11 +1529,11 @@ void SeasideCache::contactsAvailable()
             }
 
             QChar oldNameGroup;
-            QContactName oldName;
+            QString oldDisplayLabel;
 
             if (preexisting) {
                 oldNameGroup = item->nameGroup;
-                oldName = item->contact.detail<QContactName>();
+                oldDisplayLabel = item->displayLabel;
 
                 if (partialFetch) {
                     // Copy any existing detail types that are in the current record to the new instance
@@ -1552,28 +1546,13 @@ void SeasideCache::contactsAvailable()
                 }
             }
 
-            QContactName newName = contact.detail<QContactName>();
-
-#ifdef USING_QTPIM
-            if (newName.value<QString>(QContactName__FieldCustomLabel).isEmpty()) {
-#else
-            if (newName.customLabel().isEmpty()) {
-#endif
-                // Maintain the existing custom label value if we have set it
-#ifdef USING_QTPIM
-                newName.setValue(QContactName__FieldCustomLabel, oldName.value(QContactName__FieldCustomLabel));
-#else
-                newName.setCustomLabel(oldName.customLabel());
-#endif
-                contact.saveDetail(&newName);
-            }
-
             // This is a simplification of reality, should we test more changes?
-            bool roleDataChanged = (newName != oldName) ||
-                                   contact.detail<QContactAvatar>().imageUrl() != item->contact.detail<QContactAvatar>().imageUrl();
+            bool roleDataChanged = contact.detail<QContactAvatar>().imageUrl() != item->contact.detail<QContactAvatar>().imageUrl();
 
             roleDataChanged |= updateContactIndexing(item->contact, contact, iid, queryDetailTypes);
+
             updateCache(item, contact, partialFetch);
+            roleDataChanged |= (item->displayLabel != oldDisplayLabel);
 
             // do this even if !roleDataChanged as name groups are affected by other display label changes
             if (item->nameGroup != oldNameGroup) {
@@ -2003,15 +1982,10 @@ void SeasideCache::displayLabelOrderChanged()
         for (iterator it = m_people.begin(); it != m_people.end(); ++it) {
             if (it->itemData) {
                 it->itemData->displayLabelOrderChanged(m_displayLabelOrder);
-            } else {
-                QContactName name = it->contact.detail<QContactName>();
-#ifdef USING_QTPIM
-                name.setValue(QContactName__FieldCustomLabel, generateDisplayLabel(it->contact));
-#else
-                name.setCustomLabel(generateDisplayLabel(it->contact));
-#endif
-                it->contact.saveDetail(&name);
             }
+
+            // Regenerate the display label
+            it->displayLabel = generateDisplayLabel(it->contact, m_displayLabelOrder);
 
             // Update the nameGroup for this contact
             const QChar group(determineNameGroup(&*it));
@@ -2023,6 +1997,8 @@ void SeasideCache::displayLabelOrderChanged()
                 it->nameGroup = group;
                 addToContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
             }
+
+            contactDataChanged(apiId(it->iid));
         }
 
         notifyNameGroupsChanged(modifiedGroups);
