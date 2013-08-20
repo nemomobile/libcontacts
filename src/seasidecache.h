@@ -336,6 +336,8 @@ public:
     static QString generateDisplayLabel(const QContact &contact, DisplayLabelOrder order = FirstNameFirst);
     static QString generateDisplayLabelFromNonNameDetails(const QContact &contact);
 
+    static QString normalizePhoneNumber(const QString &input);
+
     bool event(QEvent *event);
 
     // For synchronizeLists()

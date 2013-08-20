@@ -32,8 +32,8 @@
 #include "seasidecache.h"
 
 #include "synchronizelists.h"
-#include "normalization_p.h"
 
+#include "qtcontacts-extensions_impl.h"
 #include "qcontactstatusflags_impl.h"
 
 #include <QCoreApplication>
@@ -700,7 +700,7 @@ void SeasideCache::refreshContact(CacheItem *cacheItem)
 
 SeasideCache::CacheItem *SeasideCache::itemByPhoneNumber(const QString &number, bool requireComplete)
 {
-    QString normalizedNumber = Normalization::normalizePhoneNumber(number);
+    QString normalizedNumber = normalizePhoneNumber(number);
     QHash<QString, quint32>::const_iterator it = instancePtr->m_phoneNumberIds.find(normalizedNumber);
     if (it != instancePtr->m_phoneNumberIds.end())
         return itemById(*it, requireComplete);
@@ -973,6 +973,14 @@ QString SeasideCache::generateDisplayLabelFromNonNameDetails(const QContact &con
     }
 
     return QString();
+}
+
+QString SeasideCache::normalizePhoneNumber(const QString &input)
+{
+    // TODO: use a configuration variable to make this configurable
+    static const int maxCharacters = 7;
+
+    return QtContactsSqliteExtensions::minimizePhoneNumber(input, maxCharacters);
 }
 
 static QContactFilter filterForMergeCandidates(const QContact &contact)
@@ -1426,12 +1434,12 @@ bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QCont
         // Addresses which are no longer in the contact should be de-indexed
         QSet<QString> oldPhoneNumbers;
         foreach (const QContactPhoneNumber &phoneNumber, oldContact.details<QContactPhoneNumber>()) {
-            oldPhoneNumbers.insert(Normalization::normalizePhoneNumber(phoneNumber.number()));
+            oldPhoneNumbers.insert(normalizePhoneNumber(phoneNumber.number()));
         }
 
         // Update our address indexes for any address details in this contact
         foreach (const QContactPhoneNumber &phoneNumber, contact.details<QContactPhoneNumber>()) {
-            QString normalizedNumber = Normalization::normalizePhoneNumber(phoneNumber.number());
+            QString normalizedNumber = normalizePhoneNumber(phoneNumber.number());
             m_phoneNumberIds[normalizedNumber] = iid;
             modified |= !oldPhoneNumbers.remove(normalizedNumber);
         }

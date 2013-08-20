@@ -12,7 +12,7 @@ BuildRequires:  pkgconfig(Qt5Test)
 BuildRequires:  pkgconfig(Qt5Contacts)
 BuildRequires:  pkgconfig(Qt5Versit)
 BuildRequires:  pkgconfig(mlite5)
-BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions) >= 0.1.1
+BuildRequires:  pkgconfig(qtcontacts-sqlite-qt5-extensions) >= 0.1.8
 
 %description
 %{summary}.

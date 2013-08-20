@@ -11,7 +11,7 @@ BuildRequires:  pkgconfig(QtCore)
 BuildRequires:  pkgconfig(QtContacts)
 BuildRequires:  pkgconfig(QtVersit)
 BuildRequires:  pkgconfig(mlite)
-BuildRequires:  pkgconfig(qtcontacts-sqlite-extensions) >= 0.1.1
+BuildRequires:  pkgconfig(qtcontacts-sqlite-extensions) >= 0.1.8
 
 %description
 %{summary}.

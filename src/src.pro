@@ -10,7 +10,7 @@ target.path = $$PREFIX/lib
 INSTALLS += target
 
 # set version for generated pkgconfig files
-VERSION=0.0.13
+VERSION=0.0.14
 QMAKE_PKGCONFIG_INCDIR = $$PREFIX/include/$${PACKAGENAME}
 QMAKE_PKGCONFIG_LIBDIR = $$PREFIX/lib
 QMAKE_PKGCONFIG_DESTDIR = pkgconfig
@@ -36,11 +36,9 @@ equals(QT_MAJOR_VERSION, 5) {
 DEFINES += CONTACTCACHE_BUILD
 
 SOURCES += \
-    $$PWD/normalization.cpp \
     $$PWD/seasidecache.cpp
 
 HEADERS += \
-    $$PWD/normalization_p.h \
     $$PWD/contactcacheexport.h \
     $$PWD/seasidecache.h \
     $$PWD/synchronizelists.h \
