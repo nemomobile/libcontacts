@@ -557,21 +557,7 @@ QChar SeasideCache::determineNameGroup(const CacheItem *cacheItem)
     }
 
     QChar group;
-    QString first;
-    QString last;
-    QContactName nameDetail = cacheItem->contact.detail<QContactName>();
-    if (SeasideCache::displayLabelOrder() == FirstNameFirst) {
-        first = nameDetail.firstName();
-        last = nameDetail.lastName();
-    } else {
-        first = nameDetail.lastName();
-        last = nameDetail.firstName();
-    }
-    if (!first.isEmpty()) {
-        group = first[0].toUpper();
-    } else if (!last.isEmpty()) {
-        group = last[0].toUpper();
-    } else if (!cacheItem->displayLabel.isEmpty()) {
+    if (!cacheItem->displayLabel.isEmpty()) {
         group = cacheItem->displayLabel[0].toUpper();
     }
 
@@ -1427,9 +1413,8 @@ void SeasideCache::updateCache(CacheItem *item, const QContact &contact, bool pa
         item->contact = contact;
     }
 
-    // Check if the name group has changed
-    item->nameGroup = determineNameGroup(item);
     item->displayLabel = generateDisplayLabel(item->contact, m_displayLabelOrder);
+    item->nameGroup = determineNameGroup(item);
 }
 
 bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes)
