@@ -452,6 +452,8 @@ private:
     QContactSaveRequest m_saveRequest;
     QContactRelationshipSaveRequest m_relationshipSaveRequest;
     QContactRelationshipRemoveRequest m_relationshipRemoveRequest;
+    QList<QContactSortOrder> m_sortOrder;
+    QList<QContactSortOrder> m_onlineSortOrder;
 #ifdef HAS_MLITE
     MGConfItem m_displayLabelOrderConf;
 #endif

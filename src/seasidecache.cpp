@@ -1163,11 +1163,13 @@ bool SeasideCache::event(QEvent *event)
 
         // Find candidates to merge with this contact
         m_contactIdRequest.setFilter(filterForMergeCandidates(contact));
+        m_contactIdRequest.setSorting(m_sortOrder);
         m_contactIdRequest.start();
     } else if ((m_populateProgress == Unpopulated) && m_keepPopulated && !m_fetchRequest.isActive()) {
         // Start a query to fully populate the cache, starting with favorites
         m_fetchRequest.setFilter(favoriteFilter());
         m_fetchRequest.setFetchHint(favoriteFetchHint(m_fetchTypes));
+        m_fetchRequest.setSorting(m_sortOrder);
         m_fetchRequest.start();
 
         m_appendIndex = 0;
@@ -1176,6 +1178,7 @@ bool SeasideCache::event(QEvent *event)
         // We need to refetch the metadata for all contacts (because the required data changed)
         m_fetchRequest.setFilter(favoriteFilter());
         m_fetchRequest.setFetchHint(favoriteFetchHint(m_fetchTypes));
+        m_fetchRequest.setSorting(m_sortOrder);
         m_fetchRequest.start();
 
         m_fetchTypesChanged = false;
@@ -1195,6 +1198,7 @@ bool SeasideCache::event(QEvent *event)
         // we only want to retrieve aggregate contacts that have changed
         m_fetchRequest.setFilter(filter & aggregateFilter());
         m_fetchRequest.setFetchHint(basicFetchHint());
+        m_fetchRequest.setSorting(m_sortOrder);
         m_fetchRequest.start();
     } else if (!m_resolveAddresses.isEmpty() && !m_fetchRequest.isActive()) {
         const ResolveData &resolve = m_resolveAddresses.first();
@@ -1228,6 +1232,7 @@ bool SeasideCache::event(QEvent *event)
         // as the favorites store, so we don't update any favorite with a smaller data subset
         m_activeResolve = &resolve;
         m_fetchRequest.setFetchHint(resolve.requireComplete ? basicFetchHint() : favoriteFetchHint(m_fetchTypes));
+        m_fetchRequest.setSorting(m_sortOrder);
         m_fetchRequest.start();
     } else if (m_refreshRequired && !m_contactIdRequest.isActive()) {
         m_refreshRequired = false;
@@ -1235,6 +1240,7 @@ bool SeasideCache::event(QEvent *event)
         m_resultsRead = 0;
         m_syncFilter = FilterFavorites;
         m_contactIdRequest.setFilter(favoriteFilter());
+        m_contactIdRequest.setSorting(m_sortOrder);
         m_contactIdRequest.start();
     } else {
         m_updatesPending = false;
@@ -1841,6 +1847,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
                 // Next, query for all contacts (including favorites)
                 m_syncFilter = FilterAll;
                 m_contactIdRequest.setFilter(allFilter());
+                m_contactIdRequest.setSorting(m_sortOrder);
                 m_contactIdRequest.start();
 
                 activityCompleted = false;
@@ -1848,6 +1855,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
                 // Next, query for online contacts
                 m_syncFilter = FilterOnline;
                 m_contactIdRequest.setFilter(onlineFilter());
+                m_contactIdRequest.setSorting(m_onlineSortOrder);
                 m_contactIdRequest.start();
 
                 activityCompleted = false;
@@ -1876,6 +1884,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
             // Start a query to fully populate the cache, starting with favorites
             m_fetchRequest.setFilter(favoriteFilter());
             m_fetchRequest.setFetchHint(favoriteFetchHint(m_fetchTypes));
+            m_fetchRequest.setSorting(m_sortOrder);
             m_fetchRequest.start();
 
             m_appendIndex = 0;
@@ -1889,6 +1898,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
             // Request the metadata of all contacts (only data from the primary table)
             m_fetchRequest.setFilter(allFilter());
             m_fetchRequest.setFetchHint(metadataFetchHint(m_fetchTypes));
+            m_fetchRequest.setSorting(m_sortOrder);
             m_fetchRequest.start();
 
             m_fetchTypesChanged = false;
@@ -1903,6 +1913,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
             // Now query for online contacts
             m_fetchRequest.setFilter(onlineFilter());
             m_fetchRequest.setFetchHint(onlineFetchHint(m_fetchTypes));
+            m_fetchRequest.setSorting(m_onlineSortOrder);
             m_fetchRequest.start();
 
             m_appendIndex = 0;
@@ -1917,6 +1928,7 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
             // Re-fetch the non-favorites
             m_fetchRequest.setFilter(nonfavoriteFilter());
             m_fetchRequest.setFetchHint(onlineFetchHint(m_fetchTypes));
+            m_fetchRequest.setSorting(m_sortOrder);
             m_fetchRequest.start();
 
             m_populateProgress = RefetchOthers;
@@ -1967,12 +1979,16 @@ void SeasideCache::setSortOrder(DisplayLabelOrder order)
     lastNameOrder.setDirection(Qt::AscendingOrder);
     lastNameOrder.setBlankPolicy(QContactSortOrder::BlanksFirst);
 
-    QList<QContactSortOrder> sorting = (order == FirstNameFirst)
-            ? (QList<QContactSortOrder>() << firstNameOrder << lastNameOrder)
-            : (QList<QContactSortOrder>() << lastNameOrder << firstNameOrder);
+    m_sortOrder = (order == FirstNameFirst) ? (QList<QContactSortOrder>() << firstNameOrder << lastNameOrder)
+                                            : (QList<QContactSortOrder>() << lastNameOrder << firstNameOrder);
 
-    m_fetchRequest.setSorting(sorting);
-    m_contactIdRequest.setSorting(sorting);
+    m_onlineSortOrder = m_sortOrder;
+
+    QContactSortOrder onlineOrder;
+    setDetailType<QContactGlobalPresence>(onlineOrder, QContactGlobalPresence::FieldPresenceState);
+    onlineOrder.setDirection(Qt::AscendingOrder);
+
+    m_onlineSortOrder.prepend(onlineOrder);
 }
 
 void SeasideCache::displayLabelOrderChanged()
