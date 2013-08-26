@@ -559,7 +559,7 @@ QChar SeasideCache::determineNameGroup(const CacheItem *cacheItem)
     QChar group;
     if (!cacheItem->displayLabel.isEmpty()) {
         group = cacheItem->displayLabel[0].toUpper();
-    }
+    } 
 
     // XXX temporary workaround for non-latin names: use non-name details to try to find a
     // latin character group
@@ -590,6 +590,12 @@ QHash<QChar, QSet<quint32> > SeasideCache::nameGroupMembers()
 SeasideCache::DisplayLabelOrder SeasideCache::displayLabelOrder()
 {
     return instancePtr->m_displayLabelOrder;
+}
+
+void SeasideCache::setDisplayLabelOrder(DisplayLabelOrder order)
+{
+    instancePtr->m_displayLabelOrder = order;
+    instancePtr->setSortOrder(order);
 }
 
 int SeasideCache::contactId(const QContact &contact)
@@ -780,6 +786,8 @@ void SeasideCache::contactDataChanged(const ContactIdType &contactId)
     instancePtr->contactDataChanged(contactId, FilterFavorites);
     instancePtr->contactDataChanged(contactId, FilterOnline);
     instancePtr->contactDataChanged(contactId, FilterAll);
+    instancePtr->contactDataChanged(contactId, FilterEmail);
+    instancePtr->contactDataChanged(contactId, FilterPhoneNumber);
 }
 
 void SeasideCache::contactDataChanged(const ContactIdType &contactId, FilterType filter)
@@ -803,6 +811,8 @@ bool SeasideCache::removeContact(const QContact &contact)
     instancePtr->removeContactData(id, FilterFavorites);
     instancePtr->removeContactData(id, FilterOnline);
     instancePtr->removeContactData(id, FilterAll);
+    instancePtr->removeContactData(id, FilterEmail);
+    instancePtr->removeContactData(id, FilterPhoneNumber);
 
     instancePtr->requestUpdate();
     return true;
@@ -1505,9 +1515,26 @@ void SeasideCache::contactsAvailable()
 
     if (m_populateProgress > Unpopulated && m_populateProgress < Populated) {
         // We are populating the cache
-        FilterType type(m_populateProgress == FetchFavorites ? FilterFavorites
-                                                             : (m_populateProgress == FetchMetadata ? FilterAll
-                                                                                                    : FilterOnline));
+        FilterType type;
+        
+        switch (m_populateProgress)
+        {
+            case FetchFavorites:
+                type = FilterFavorites;
+                break;
+            case FetchEmail:
+                type = FilterEmail;
+                break;
+            case FetchPhone:
+                type = FilterPhoneNumber;
+                break;
+            case FetchMetadata:
+                type = FilterAll;
+                break;
+            default:
+                type = FilterOnline;
+                break;        	
+        }
         appendContacts(contacts, type, partialFetch);
     } else {
         // An update.
@@ -1830,6 +1857,20 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
 
             if (m_syncFilter == FilterFavorites) {
                 // Next, query for all contacts (including favorites)
+                m_syncFilter = FilterEmail;
+                m_contactIdRequest.setFilter(QContactEmailAddress::match(""));
+                m_contactIdRequest.start();
+
+                activityCompleted = false;
+            } else if (m_syncFilter == FilterEmail) {
+                // Next, query for all contacts (including favorites)
+                m_syncFilter = FilterPhoneNumber;
+                m_contactIdRequest.setFilter(QContactPhoneNumber::match("*"));
+                m_contactIdRequest.start();
+
+                activityCompleted = false;
+            } else if (m_syncFilter == FilterPhoneNumber) {
+                // Next, query for all contacts (including favorites)
                 m_syncFilter = FilterAll;
                 m_contactIdRequest.setFilter(allFilter());
                 m_contactIdRequest.setSorting(m_sortOrder);
@@ -1878,6 +1919,42 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
         } else if (m_populateProgress == FetchFavorites) {
             makePopulated(FilterFavorites);
             qDebug() << "Favorites queried in" << m_timer.elapsed() << "ms";
+
+            // Next, query for all contacts (except favorites)
+            // Request the metadata of all contacts (only data from the primary table)
+            m_fetchRequest.setFilter(QContactEmailAddress::match(""));
+            QContactFetchHint fetchHint;
+            fetchHint.setOptimizationHints(QContactFetchHint::NoRelationships
+                | QContactFetchHint::NoActionPreferences
+                | QContactFetchHint::NoBinaryBlobs);
+            m_fetchRequest.setFetchHint(fetchHint);
+            m_fetchRequest.start();
+
+            m_fetchTypesChanged = false;
+            m_appendIndex = 0;
+            m_populateProgress = FetchEmail;
+            activityCompleted = false;
+        } else if (m_populateProgress == FetchEmail) {
+            makePopulated(FilterEmail);
+            qDebug() << "Emails queried in" << m_timer.elapsed() << "ms";
+
+            // Next, query for all contacts (except favorites)
+            // Request the metadata of all contacts (only data from the primary table)
+            m_fetchRequest.setFilter(QContactPhoneNumber::match("*"));
+            QContactFetchHint fetchHint;
+            fetchHint.setOptimizationHints(QContactFetchHint::NoRelationships
+                | QContactFetchHint::NoActionPreferences
+                | QContactFetchHint::NoBinaryBlobs);
+            m_fetchRequest.setFetchHint(fetchHint);
+            m_fetchRequest.start();
+
+            m_fetchTypesChanged = false;
+            m_appendIndex = 0;
+            m_populateProgress = FetchPhone;
+            activityCompleted = false;
+        } else if (m_populateProgress == FetchPhone) {
+            makePopulated(FilterPhoneNumber);
+            qDebug() << "Phone numbers queried in" << m_timer.elapsed() << "ms";
 
             // Next, query for all contacts (except favorites)
             // Request the metadata of all contacts (only data from the primary table)
@@ -1991,6 +2068,14 @@ void SeasideCache::displayLabelOrderChanged()
         for (iterator it = m_people.begin(); it != m_people.end(); ++it) {
             if (it->itemData) {
                 it->itemData->displayLabelOrderChanged(m_displayLabelOrder);
+            } else {
+                QContactName name = it->contact.detail<QContactName>();
+#ifdef USING_QTPIM
+                name.setValue(QContactName__FieldCustomLabel, generateDisplayLabel(it->contact, m_displayLabelOrder));
+#else
+                name.setCustomLabel(generateDisplayLabel(it->contact, m_displayLabelOrder));
+#endif
+                it->contact.saveDetail(&name);
             }
 
             // Regenerate the display label

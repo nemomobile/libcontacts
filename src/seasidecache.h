@@ -96,6 +96,8 @@ public:
         FilterAll,
         FilterFavorites,
         FilterOnline,
+        FilterEmail,
+        FilterPhoneNumber,        
         FilterTypesCount
     };
 
@@ -287,6 +289,7 @@ public:
     static void setNameGrouper(SeasideNameGrouper *grouper);
 
     static DisplayLabelOrder displayLabelOrder();
+    static void setDisplayLabelOrder(DisplayLabelOrder order);
 
     static int contactId(const QContact &contact);
 
@@ -333,7 +336,7 @@ public:
     static const QVector<ContactIdType> *contacts(FilterType filterType);
     static bool isPopulated(FilterType filterType);
 
-    static QString generateDisplayLabel(const QContact &contact, DisplayLabelOrder order = FirstNameFirst);
+    static QString generateDisplayLabel(const QContact &contact, DisplayLabelOrder order);
     static QString generateDisplayLabelFromNonNameDetails(const QContact &contact);
 
     static QString normalizePhoneNumber(const QString &input);
@@ -372,9 +375,13 @@ private:
         FetchFavorites,
         FetchMetadata,
         FetchOnline,
+        FetchEmail,
+        FetchPhone,
         Populated,
         RefetchFavorites,
-        RefetchOthers
+        RefetchOthers,
+        RefetchEmail,
+        RefetchPhone,
     };
 
     SeasideCache();
