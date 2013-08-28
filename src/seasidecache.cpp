@@ -1401,12 +1401,6 @@ void SeasideCache::updateCache(CacheItem *item, const QContact &contact, bool pa
 
     item->statusFlags = contact.detail<QContactStatusFlags>().flagsValue();
 
-    ItemListener *listener = item->listeners;
-    while (listener) {
-        listener->itemUpdated(item);
-        listener = listener->next;
-    }
-
     if (item->itemData) {
         item->itemData->updateContact(contact, &item->contact, item->contactState);
     } else {
@@ -1415,6 +1409,12 @@ void SeasideCache::updateCache(CacheItem *item, const QContact &contact, bool pa
 
     item->displayLabel = generateDisplayLabel(item->contact, m_displayLabelOrder);
     item->nameGroup = determineNameGroup(item);
+
+    ItemListener *listener = item->listeners;
+    while (listener) {
+        listener->itemUpdated(item);
+        listener = listener->next;
+    }
 }
 
 bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes)
