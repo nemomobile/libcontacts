@@ -107,8 +107,8 @@ public:
     };
 
     enum DisplayLabelOrder {
-        FirstNameFirst = SeasideNameGrouper::FirstNameFirst,
-        LastNameFirst = SeasideNameGrouper::LastNameFirst
+        FirstNameFirst = 0,
+        LastNameFirst
     };
 
     enum ContactState {
@@ -237,6 +237,7 @@ public:
 
         virtual void makePopulated() = 0;
         virtual void updateDisplayLabelOrder() = 0;
+        virtual void updateSortProperty() = 0;
     };
 
     struct ResolveListener
@@ -287,6 +288,7 @@ public:
     static void setNameGrouper(SeasideNameGrouper *grouper);
 
     static DisplayLabelOrder displayLabelOrder();
+    static QString sortProperty();
 
     static int contactId(const QContact &contact);
 
@@ -347,7 +349,7 @@ public:
 
 protected:
     void timerEvent(QTimerEvent *event);
-    void setSortOrder(DisplayLabelOrder order);
+    void setSortOrder(const QString &property);
 
 private slots:
     void contactsAvailable();
@@ -365,6 +367,7 @@ private slots:
     void contactsRemoved(const QList<QContactLocalId> &contactIds);
 #endif
     void displayLabelOrderChanged();
+    void sortPropertyChanged();
 
 private:
     enum PopulateProgress {
@@ -391,6 +394,7 @@ private:
 
     bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes);
     void updateCache(CacheItem *item, const QContact &contact, bool partialFetch);
+    void reportItemUpdated(CacheItem *item);
 
     void removeRange(FilterType filter, int index, int count);
     int insertRange(
@@ -456,6 +460,7 @@ private:
     QList<QContactSortOrder> m_onlineSortOrder;
 #ifdef HAS_MLITE
     MGConfItem m_displayLabelOrderConf;
+    MGConfItem m_sortPropertyConf;
 #endif
     int m_resultsRead;
     int m_populated;
@@ -464,6 +469,7 @@ private:
     int m_appendIndex;
     FilterType m_syncFilter;
     DisplayLabelOrder m_displayLabelOrder;
+    QString m_sortProperty;
     bool m_keepPopulated;
     PopulateProgress m_populateProgress;
     quint32 m_fetchTypes;
@@ -473,7 +479,6 @@ private:
     bool m_contactsUpdated;
     QList<ContactIdType> m_constituentIds;
     QList<ContactIdType> m_candidateIds;
-    QSet<quint32> m_reportIds;
 
     struct ResolveData {
         QString first;

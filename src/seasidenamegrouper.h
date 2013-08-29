@@ -50,12 +50,7 @@ public:
     SeasideNameGrouper() {}
     virtual ~SeasideNameGrouper() {}
 
-    enum DisplayLabelOrder {
-        FirstNameFirst,
-        LastNameFirst
-    };
-
-    virtual QChar nameGroupForContact(const QContact &contact, DisplayLabelOrder order) const = 0;
+    virtual QChar nameGroupForContact(const QContact &contact, const QString &groupProperty) const = 0;
     virtual QList<QChar> allNameGroups() const = 0;
 };
 
