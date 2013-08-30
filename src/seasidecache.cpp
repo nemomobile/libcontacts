@@ -350,6 +350,7 @@ SeasideCache::SeasideCache()
 #ifdef HAS_MLITE
     , m_displayLabelOrderConf(QLatin1String("/org/nemomobile/contacts/display_label_order"))
     , m_sortPropertyConf(QLatin1String("/org/nemomobile/contacts/sort_property"))
+    , m_groupPropertyConf(QLatin1String("/org/nemomobile/contacts/group_property"))
 #endif
     , m_resultsRead(0)
     , m_populated(0)
@@ -359,6 +360,7 @@ SeasideCache::SeasideCache()
     , m_syncFilter(FilterNone)
     , m_displayLabelOrder(FirstNameFirst)
     , m_sortProperty(QString::fromLatin1("firstName"))
+    , m_groupProperty(QString::fromLatin1("firstName"))
     , m_keepPopulated(false)
     , m_populateProgress(Unpopulated)
     , m_fetchTypes(0)
@@ -384,6 +386,11 @@ SeasideCache::SeasideCache()
     QVariant sortPropertyConf = m_sortPropertyConf.value();
     if (sortPropertyConf.isValid())
         m_sortProperty = sortPropertyConf.toString();
+
+    connect(&m_groupPropertyConf, SIGNAL(valueChanged()), this, SLOT(groupPropertyChanged()));
+    QVariant groupPropertyConf = m_groupPropertyConf.value();
+    if (groupPropertyConf.isValid())
+        m_groupProperty = groupPropertyConf.toString();
 #endif
 
 #ifdef USING_QTPIM
@@ -582,14 +589,14 @@ QChar SeasideCache::determineNameGroup(const CacheItem *cacheItem)
         return QChar();
 
     if (!instancePtr->m_nameGrouper.isNull()) {
-        QChar group = instancePtr->m_nameGrouper->nameGroupForContact(cacheItem->contact, instancePtr->m_sortProperty);
+        QChar group = instancePtr->m_nameGrouper->nameGroupForContact(cacheItem->contact, instancePtr->m_groupProperty);
         if (!group.isNull()) {
             return group;
         }
     }
 
     const QContactName name(cacheItem->contact.detail<QContactName>());
-    const QString nameProperty(instancePtr->m_sortProperty == QString::fromLatin1("firstName") ? name.firstName() : name.lastName());
+    const QString nameProperty(instancePtr->m_groupProperty == QString::fromLatin1("firstName") ? name.firstName() : name.lastName());
 
     QChar group;
     if (!nameProperty.isEmpty()) {
@@ -632,6 +639,11 @@ SeasideCache::DisplayLabelOrder SeasideCache::displayLabelOrder()
 QString SeasideCache::sortProperty()
 {
     return instancePtr->m_sortProperty;
+}
+
+QString SeasideCache::groupProperty()
+{
+    return instancePtr->m_groupProperty;
 }
 
 int SeasideCache::contactId(const QContact &contact)
@@ -2149,7 +2161,33 @@ void SeasideCache::sortPropertyChanged()
         m_sortProperty = newProperty;
         setSortOrder(m_sortProperty);
 
-        // Name grouping is also currently specified by the 'sort property' setting
+        for (int i = 0; i < FilterTypesCount; ++i) {
+            for (int j = 0; j < m_models[i].count(); ++j)
+                m_models[i].at(j)->updateSortProperty();
+        }
+
+        // Update the sorted list order
+        m_refreshRequired = true;
+        requestUpdate();
+    }
+#endif
+}
+
+void SeasideCache::groupPropertyChanged()
+{
+#ifdef HAS_MLITE
+    QVariant groupProperty = m_groupPropertyConf.value();
+    if (groupProperty.isValid() && groupProperty.toString() != m_groupProperty) {
+        const QString newProperty(groupProperty.toString());
+        if ((newProperty != QString::fromLatin1("firstName")) &&
+            (newProperty != QString::fromLatin1("lastName"))) {
+            qWarning() << "Invalid group property configuration:" << newProperty;
+            return;
+        }
+
+        m_groupProperty = newProperty;
+
+        // Update the name groups
         QSet<QChar> modifiedGroups;
 
         typedef QHash<quint32, CacheItem>::iterator iterator;
@@ -2170,12 +2208,8 @@ void SeasideCache::sortPropertyChanged()
 
         for (int i = 0; i < FilterTypesCount; ++i) {
             for (int j = 0; j < m_models[i].count(); ++j)
-                m_models[i].at(j)->updateSortProperty();
+                m_models[i].at(j)->updateGroupProperty();
         }
-
-        // Update the sorted list order
-        m_refreshRequired = true;
-        requestUpdate();
     }
 #endif
 }

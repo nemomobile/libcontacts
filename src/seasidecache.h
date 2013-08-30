@@ -238,6 +238,7 @@ public:
         virtual void makePopulated() = 0;
         virtual void updateDisplayLabelOrder() = 0;
         virtual void updateSortProperty() = 0;
+        virtual void updateGroupProperty() = 0;
     };
 
     struct ResolveListener
@@ -289,6 +290,7 @@ public:
 
     static DisplayLabelOrder displayLabelOrder();
     static QString sortProperty();
+    static QString groupProperty();
 
     static int contactId(const QContact &contact);
 
@@ -368,6 +370,7 @@ private slots:
 #endif
     void displayLabelOrderChanged();
     void sortPropertyChanged();
+    void groupPropertyChanged();
 
 private:
     enum PopulateProgress {
@@ -462,6 +465,7 @@ private:
 #ifdef HAS_MLITE
     MGConfItem m_displayLabelOrderConf;
     MGConfItem m_sortPropertyConf;
+    MGConfItem m_groupPropertyConf;
 #endif
     int m_resultsRead;
     int m_populated;
@@ -471,6 +475,7 @@ private:
     FilterType m_syncFilter;
     DisplayLabelOrder m_displayLabelOrder;
     QString m_sortProperty;
+    QString m_groupProperty;
     bool m_keepPopulated;
     PopulateProgress m_populateProgress;
     quint32 m_fetchTypes;
