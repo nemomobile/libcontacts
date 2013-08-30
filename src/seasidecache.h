@@ -392,7 +392,8 @@ private:
     void fetchContacts();
     void updateContacts(const QList<ContactIdType> &contactIds);
 
-    bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes);
+    void resolveUnknownAddresses(const QString &first, const QString &second, CacheItem *item);
+    bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes, CacheItem *item);
     void updateCache(CacheItem *item, const QContact &contact, bool partialFetch);
     void reportItemUpdated(CacheItem *item);
 
@@ -483,10 +484,12 @@ private:
     struct ResolveData {
         QString first;
         QString second;
+        QString compare;
         bool requireComplete;
         ResolveListener *listener;
     };
     QList<ResolveData> m_resolveAddresses;
+    QList<ResolveData> m_unknownAddresses;
     const ResolveData *m_activeResolve;
 
     QElapsedTimer m_timer;

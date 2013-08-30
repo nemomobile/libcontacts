@@ -271,6 +271,23 @@ QContactFilter aggregateFilter()
     return filter;
 }
 
+typedef QPair<QString, QString> StringPair;
+
+StringPair addressPair(const QContactPhoneNumber &phoneNumber)
+{
+    return qMakePair(QString(), SeasideCache::normalizePhoneNumber(phoneNumber.number()));
+}
+
+StringPair addressPair(const QContactEmailAddress &emailAddress)
+{
+    return qMakePair(emailAddress.emailAddress().toLower(), QString());
+}
+
+StringPair addressPair(const QContactOnlineAccount &account)
+{
+    return qMakePair(account.value<QString>(QContactOnlineAccount__FieldAccountPath), account.accountUri().toLower());
+}
+
 }
 
 SeasideCache *SeasideCache::instancePtr = 0;
@@ -518,9 +535,18 @@ void SeasideCache::unregisterResolveListener(ResolveListener *listener)
     }
 
     QList<ResolveData>::iterator it = instancePtr->m_resolveAddresses.begin();
-    for ( ; it != instancePtr->m_resolveAddresses.end(); ) {
+    while (it != instancePtr->m_resolveAddresses.end()) {
         if (it->listener == listener) {
             it = instancePtr->m_resolveAddresses.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    it = instancePtr->m_unknownAddresses.begin();
+    while (it != instancePtr->m_unknownAddresses.end()) {
+        if (it->listener == listener) {
+            it = instancePtr->m_unknownAddresses.erase(it);
         } else {
             ++it;
         }
@@ -1439,66 +1465,121 @@ void SeasideCache::reportItemUpdated(CacheItem *item)
     }
 }
 
-bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes)
+void SeasideCache::resolveUnknownAddresses(const QString &first, const QString &second, CacheItem *item)
+{
+    QList<ResolveData>::iterator it = instancePtr->m_unknownAddresses.begin();
+    while (it != instancePtr->m_unknownAddresses.end()) {
+        bool resolved = false;
+
+        if (first == QString()) {
+            // This is a phone number - test in normalized form
+            resolved = (it->first == QString()) && (it->compare == second);
+        } else if (second == QString()) {
+            // Email address - compare in lowercased form
+            resolved = (it->compare == first) && (it->second == QString());
+        } else {
+            // Online account - compare URI in lowercased form
+            resolved = (it->first == first) && (it->compare == second);
+        }
+
+        if (resolved) {
+            // Inform the listener of resolution
+            it->listener->addressResolved(it->first, it->second, item);
+
+            // Do we need to request completion as well?
+            if (it->requireComplete) {
+                ensureCompletion(item);
+            }
+
+            it = instancePtr->m_unknownAddresses.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<DetailTypeId> &queryDetailTypes, CacheItem *item)
 {
     bool modified = false;
 
+    QSet<StringPair> oldAddresses;
+
     if (queryDetailTypes.isEmpty() || queryDetailTypes.contains(detailType<QContactPhoneNumber>())) {
         // Addresses which are no longer in the contact should be de-indexed
-        QSet<QString> oldPhoneNumbers;
         foreach (const QContactPhoneNumber &phoneNumber, oldContact.details<QContactPhoneNumber>()) {
-            oldPhoneNumbers.insert(normalizePhoneNumber(phoneNumber.number()));
+            oldAddresses.insert(addressPair(phoneNumber));
         }
 
         // Update our address indexes for any address details in this contact
         foreach (const QContactPhoneNumber &phoneNumber, contact.details<QContactPhoneNumber>()) {
-            QString normalizedNumber = normalizePhoneNumber(phoneNumber.number());
-            m_phoneNumberIds[normalizedNumber] = iid;
-            modified |= !oldPhoneNumbers.remove(normalizedNumber);
+            const StringPair address(addressPair(phoneNumber));
+
+            if (!oldAddresses.remove(address)) {
+                // This address was not previously recorded
+                modified = true;
+                resolveUnknownAddresses(address.first, address.second, item);
+            }
+
+            m_phoneNumberIds[address.second] = iid;
         }
 
         // Remove any addresses no longer available for this contact
-        modified |= !oldPhoneNumbers.isEmpty();
-        foreach (const QString &phoneNumber, oldPhoneNumbers) {
-            m_phoneNumberIds.remove(phoneNumber);
+        if (!oldAddresses.isEmpty()) {
+            modified = true;
+            foreach (const StringPair &address, oldAddresses) {
+                m_phoneNumberIds.remove(address.second);
+            }
+            oldAddresses.clear();
         }
     }
 
     if (queryDetailTypes.isEmpty() || queryDetailTypes.contains(detailType<QContactEmailAddress>())) {
-        QSet<QString> oldEmailAddresses;
         foreach (const QContactEmailAddress &emailAddress, oldContact.details<QContactEmailAddress>()) {
-            oldEmailAddresses.insert(emailAddress.emailAddress().toLower());
+            oldAddresses.insert(addressPair(emailAddress));
         }
 
         foreach (const QContactEmailAddress &emailAddress, contact.details<QContactEmailAddress>()) {
-            QString address = emailAddress.emailAddress().toLower();
-            m_emailAddressIds[address] = iid;
-            modified |= !oldEmailAddresses.remove(address);
+            const StringPair address(addressPair(emailAddress));
+
+            if (!oldAddresses.remove(address)) {
+                modified = true;
+                resolveUnknownAddresses(address.first, address.second, item);
+            }
+
+            m_emailAddressIds[address.first] = iid;
         }
 
-        modified |= !oldEmailAddresses.isEmpty();
-        foreach (const QString &emailAddress, oldEmailAddresses) {
-            m_emailAddressIds.remove(emailAddress);
+        if (!oldAddresses.isEmpty()) {
+            modified = true;
+            foreach (const StringPair &address, oldAddresses) {
+                m_emailAddressIds.remove(address.first);
+            }
+            oldAddresses.clear();
         }
     }
 
     if (queryDetailTypes.isEmpty() || queryDetailTypes.contains(detailType<QContactOnlineAccount>())) {
-        typedef QPair<QString, QString> StringPair;
-        QSet<StringPair> oldOnlineAccounts;
         foreach (const QContactOnlineAccount &account, oldContact.details<QContactOnlineAccount>()) {
-            oldOnlineAccounts.insert(qMakePair(account.value<QString>(QContactOnlineAccount__FieldAccountPath), account.accountUri().toLower()));
+            oldAddresses.insert(addressPair(account));
         }
 
         foreach (const QContactOnlineAccount &account, contact.details<QContactOnlineAccount>()) {
-            QString path = account.value<QString>(QContactOnlineAccount__FieldAccountPath);
-            StringPair address = qMakePair(path, account.accountUri());
+            const StringPair address(addressPair(account));
+
+            if (!oldAddresses.remove(address)) {
+                modified = true;
+                resolveUnknownAddresses(address.first, address.second, item);
+            }
+
             m_onlineAccountIds[address] = iid;
-            modified |= !oldOnlineAccounts.remove(address);
         }
 
-        modified |= !oldOnlineAccounts.isEmpty();
-        foreach (const StringPair &address, oldOnlineAccounts) {
-            m_onlineAccountIds.remove(address);
+        if (!oldAddresses.isEmpty()) {
+            modified = true;
+            foreach (const StringPair &address, oldAddresses) {
+                m_onlineAccountIds.remove(address);
+            }
+            oldAddresses.clear();
         }
     }
 
@@ -1570,7 +1651,7 @@ void SeasideCache::contactsAvailable()
             // This is a simplification of reality, should we test more changes?
             bool roleDataChanged = contact.detail<QContactAvatar>().imageUrl() != item->contact.detail<QContactAvatar>().imageUrl();
 
-            roleDataChanged |= updateContactIndexing(item->contact, contact, iid, queryDetailTypes);
+            roleDataChanged |= updateContactIndexing(item->contact, contact, iid, queryDetailTypes, item);
 
             updateCache(item, contact, partialFetch);
             roleDataChanged |= (item->displayLabel != oldDisplayLabel);
@@ -1744,7 +1825,7 @@ void SeasideCache::appendContacts(const QList<QContact> &contacts, FilterType fi
                 if ((cacheItem.iid == 0) ||
                     (cacheItem.contact.detail<QContactFavorite>().isFavorite() == false)) {
                     cacheItem.iid = iid;
-                    updateContactIndexing(QContact(), contact, iid, QSet<DetailTypeId>());
+                    updateContactIndexing(QContact(), contact, iid, QSet<DetailTypeId>(), &cacheItem);
                     updateCache(&cacheItem, contact, partialFetch);
                 }
 
@@ -1939,6 +2020,21 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
                 CacheItem *item = 0;
                 if (!m_fetchRequest.contacts().isEmpty()) {
                     item = itemById(apiId(m_fetchRequest.contacts().first()), false);
+                } else {
+                    // This address is unknown - keep it for later resolution
+                    ResolveData data(*m_activeResolve);
+                    if (data.first == QString()) {
+                        // Compare this phone number in normalized form
+                        data.compare = normalizePhoneNumber(data.second);
+                    } else if (data.second == QString()) {
+                        // Compare this email address in lowercased form
+                        data.compare = data.first.toLower();
+                    } else {
+                        // Compare this account URI in lowercased form
+                        data.compare = data.second.toLower();
+                    }
+
+                    m_unknownAddresses.append(data);
                 }
                 m_activeResolve->listener->addressResolved(m_activeResolve->first, m_activeResolve->second, item);
 
@@ -2003,10 +2099,6 @@ void SeasideCache::displayLabelOrderChanged()
         // Update the display labels
         typedef QHash<quint32, CacheItem>::iterator iterator;
         for (iterator it = m_people.begin(); it != m_people.end(); ++it) {
-            if (it->itemData) {
-                it->itemData->displayLabelOrderChanged(m_displayLabelOrder);
-            }
-
             // Regenerate the display label
             QString newLabel = generateDisplayLabel(it->contact, m_displayLabelOrder);
             if (newLabel != it->displayLabel) {
@@ -2014,6 +2106,10 @@ void SeasideCache::displayLabelOrderChanged()
 
                 contactDataChanged(apiId(it->iid));
                 reportItemUpdated(&*it);
+            }
+
+            if (it->itemData) {
+                it->itemData->displayLabelOrderChanged(m_displayLabelOrder);
             }
 
             // If the contact's name group is derived from display label, it may have changed
