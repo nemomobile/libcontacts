@@ -2139,8 +2139,12 @@ void SeasideCache::displayLabelOrderChanged()
         notifyNameGroupsChanged(modifiedGroups);
 
         for (int i = 0; i < FilterTypesCount; ++i) {
-            for (int j = 0; j < m_models[i].count(); ++j)
-                m_models[i].at(j)->updateDisplayLabelOrder();
+            const QList<ListModel *> &models = m_models[i];
+            for (int j = 0; j < models.count(); ++j) {
+                ListModel *model = models.at(j);
+                model->updateDisplayLabelOrder();
+                model->sourceItemsChanged();
+            }
         }
     }
 #endif
@@ -2162,8 +2166,11 @@ void SeasideCache::sortPropertyChanged()
         setSortOrder(m_sortProperty);
 
         for (int i = 0; i < FilterTypesCount; ++i) {
-            for (int j = 0; j < m_models[i].count(); ++j)
-                m_models[i].at(j)->updateSortProperty();
+            const QList<ListModel *> &models = m_models[i];
+            for (int j = 0; j < models.count(); ++j) {
+                models.at(j)->updateSortProperty();
+                // No need for sourceItemsChanged, as the sorted list update will cause that
+            }
         }
 
         // Update the sorted list order
@@ -2207,8 +2214,12 @@ void SeasideCache::groupPropertyChanged()
         notifyNameGroupsChanged(modifiedGroups);
 
         for (int i = 0; i < FilterTypesCount; ++i) {
-            for (int j = 0; j < m_models[i].count(); ++j)
-                m_models[i].at(j)->updateGroupProperty();
+            const QList<ListModel *> &models = m_models[i];
+            for (int j = 0; j < models.count(); ++j) {
+                ListModel *model = models.at(j);
+                model->updateGroupProperty();
+                model->sourceItemsChanged();
+            }
         }
     }
 #endif
