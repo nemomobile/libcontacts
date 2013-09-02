@@ -264,9 +264,11 @@ QContactFilter onlineFilter()
 
 QContactFilter aggregateFilter()
 {
+    static const QString aggregate(QString::fromLatin1("aggregate"));
+
     QContactDetailFilter filter;
     setDetailType<QContactSyncTarget>(filter, QContactSyncTarget::FieldSyncTarget);
-    filter.setValue("aggregate");
+    filter.setValue(aggregate);
 
     return filter;
 }
@@ -286,6 +288,20 @@ StringPair addressPair(const QContactEmailAddress &emailAddress)
 StringPair addressPair(const QContactOnlineAccount &account)
 {
     return qMakePair(account.value<QString>(QContactOnlineAccount__FieldAccountPath), account.accountUri().toLower());
+}
+
+bool ignoreContactForNameGroups(const QContact &contact)
+{
+    static const QString aggregate(QString::fromLatin1("aggregate"));
+
+    // Don't include the self contact in name groups
+    if (SeasideCache::apiId(contact) == SeasideCache::selfContactId()) {
+        return true;
+    }
+
+    // Also ignore non-aggregate contacts
+    QContactSyncTarget syncTarget = contact.detail<QContactSyncTarget>();
+    return (syncTarget.syncTarget() != aggregate);
 }
 
 }
@@ -1660,8 +1676,15 @@ void SeasideCache::contactsAvailable()
                 }
             }
 
+            bool roleDataChanged = false;
+
             // This is a simplification of reality, should we test more changes?
-            bool roleDataChanged = contact.detail<QContactAvatar>().imageUrl() != item->contact.detail<QContactAvatar>().imageUrl();
+            if (!partialFetch || queryDetailTypes.contains(detailType<QContactAvatar>())) {
+                roleDataChanged |= (contact.details<QContactAvatar>() != item->contact.details<QContactAvatar>());
+            }
+            if (!partialFetch || queryDetailTypes.contains(detailType<QContactGlobalPresence>())) {
+                roleDataChanged |= (contact.detail<QContactGlobalPresence>() != item->contact.detail<QContactGlobalPresence>());
+            }
 
             roleDataChanged |= updateContactIndexing(item->contact, contact, iid, queryDetailTypes, item);
 
@@ -1670,9 +1693,11 @@ void SeasideCache::contactsAvailable()
 
             // do this even if !roleDataChanged as name groups are affected by other display label changes
             if (item->nameGroup != oldNameGroup) {
-                addToContactNameGroup(item->iid, item->nameGroup, &modifiedGroups);
-                if (!oldNameGroup.isNull()) {
-                    removeFromContactNameGroup(item->iid, oldNameGroup, &modifiedGroups);
+                if (!ignoreContactForNameGroups(item->contact)) {
+                    addToContactNameGroup(item->iid, item->nameGroup, &modifiedGroups);
+                    if (!oldNameGroup.isNull()) {
+                        removeFromContactNameGroup(item->iid, oldNameGroup, &modifiedGroups);
+                    }
                 }
             }
 
@@ -2127,12 +2152,14 @@ void SeasideCache::displayLabelOrderChanged()
             // If the contact's name group is derived from display label, it may have changed
             const QChar group(determineNameGroup(&*it));
             if (group != it->nameGroup) {
-                if (!it->nameGroup.isNull()) {
-                    removeFromContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
-                }
+                if (!ignoreContactForNameGroups(it->contact)) {
+                    if (!it->nameGroup.isNull()) {
+                        removeFromContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
+                    }
 
-                it->nameGroup = group;
-                addToContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
+                    it->nameGroup = group;
+                    addToContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
+                }
             }
         }
 
@@ -2202,12 +2229,14 @@ void SeasideCache::groupPropertyChanged()
             // Update the nameGroup for this contact
             const QChar group(determineNameGroup(&*it));
             if (group != it->nameGroup) {
-                if (!it->nameGroup.isNull()) {
-                    removeFromContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
-                }
+                if (!ignoreContactForNameGroups(it->contact)) {
+                    if (!it->nameGroup.isNull()) {
+                        removeFromContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
+                    }
 
-                it->nameGroup = group;
-                addToContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
+                    it->nameGroup = group;
+                    addToContactNameGroup(it->iid, it->nameGroup, &modifiedGroups);
+                }
             }
         }
 
