@@ -1777,8 +1777,7 @@ void SeasideCache::relationshipsAvailable()
     }
 }
 
-void SeasideCache::removeRange(
-        FilterType filter, int index, int count)
+void SeasideCache::removeRange(FilterType filter, int index, int count)
 {
     QVector<ContactIdType> &cacheIds = m_contacts[filter];
     QList<ListModel *> &models = m_models[filter];
@@ -1786,10 +1785,17 @@ void SeasideCache::removeRange(
     for (int i = 0; i < models.count(); ++i)
         models[i]->sourceAboutToRemoveItems(index, index + count - 1);
 
+    QSet<QChar> modifiedNameGroups;
+
     for (int i = 0; i < count; ++i) {
         if (filter == FilterAll) {
             const ContactIdType apiId = cacheIds.at(index);
             m_expiredContacts[apiId] -= 1;
+
+            const QChar group(nameGroup(existingItem(apiId)));
+            if (!group.isNull()) {
+                removeFromContactNameGroup(internalId(apiId), group, &modifiedNameGroups);
+            }
         }
 
         cacheIds.remove(index);
@@ -1797,6 +1803,8 @@ void SeasideCache::removeRange(
 
     for (int i = 0; i < models.count(); ++i)
         models[i]->sourceItemsRemoved();
+
+    notifyNameGroupsChanged(modifiedNameGroups);
 }
 
 int SeasideCache::insertRange(
