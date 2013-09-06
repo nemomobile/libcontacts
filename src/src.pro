@@ -31,6 +31,7 @@ equals(QT_MAJOR_VERSION, 5) {
     } else {
         warning("mlite not available. Some functionality may not work as expected.")
     }
+    PKGCONFIG += mlocale5
 }
 
 DEFINES += CONTACTCACHE_BUILD

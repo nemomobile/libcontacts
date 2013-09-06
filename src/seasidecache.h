@@ -82,7 +82,7 @@ public:
     SeasideNameGroupChangeListener() {}
     ~SeasideNameGroupChangeListener() {}
 
-    virtual void nameGroupsUpdated(const QHash<QChar, QSet<quint32> > &groups) = 0;
+    virtual void nameGroupsUpdated(const QHash<QString, QSet<quint32> > &groups) = 0;
 };
 
 class CONTACTCACHE_EXPORT SeasideCache : public QObject
@@ -206,7 +206,7 @@ public:
         quint64 statusFlags;
         ContactState contactState;
         ItemListener *listeners;
-        QChar nameGroup;
+        QString nameGroup;
         QString displayLabel;
     };
 
@@ -308,11 +308,11 @@ public:
     static void ensureCompletion(CacheItem *cacheItem);
     static void refreshContact(CacheItem *cacheItem);
 
-    static QChar nameGroup(const CacheItem *cacheItem);
-    static QChar determineNameGroup(const CacheItem *cacheItem);
+    static QString nameGroup(const CacheItem *cacheItem);
+    static QString determineNameGroup(const CacheItem *cacheItem);
 
-    static QList<QChar> allNameGroups();
-    static QHash<QChar, QSet<quint32> > nameGroupMembers();
+    static QStringList allNameGroups();
+    static QHash<QString, QSet<quint32> > nameGroupMembers();
 
     static CacheItem *itemByPhoneNumber(const QString &number, bool requireComplete = true);
     static CacheItem *itemByEmailAddress(const QString &address, bool requireComplete = true);
@@ -413,9 +413,9 @@ private:
     void removeContactData(const ContactIdType &contactId, FilterType filter);
     void makePopulated(FilterType filter);
 
-    void addToContactNameGroup(quint32 iid, const QChar &group, QSet<QChar> *modifiedGroups = 0);
-    void removeFromContactNameGroup(quint32 iid, const QChar &group, QSet<QChar> *modifiedGroups = 0);
-    void notifyNameGroupsChanged(const QSet<QChar> &groups);
+    void addToContactNameGroup(quint32 iid, const QString &group, QSet<QString> *modifiedGroups = 0);
+    void removeFromContactNameGroup(quint32 iid, const QString &group, QSet<QString> *modifiedGroups = 0);
+    void notifyNameGroupsChanged(const QSet<QString> &groups);
 
     void updateConstituentAggregations(const ContactIdType &contactId);
     void completeContactAggregation(const ContactIdType &contact1Id, const ContactIdType &contact2Id);
@@ -431,7 +431,7 @@ private:
     QHash<QString, quint32> m_emailAddressIds;
     QHash<QPair<QString, QString>, quint32> m_onlineAccountIds;
     QHash<ContactIdType, QContact> m_contactsToSave;
-    QHash<QChar, QSet<quint32> > m_contactNameGroups;
+    QHash<QString, QSet<quint32> > m_contactNameGroups;
     QList<QContact> m_contactsToCreate;
     QList<ContactIdType> m_contactsToRemove;
     QList<ContactIdType> m_changedContacts;
@@ -501,7 +501,7 @@ private:
     QElapsedTimer m_fetchPostponed;
 
     static SeasideCache *instancePtr;
-    static QList<QChar> allContactNameGroups;
+    static QStringList allContactNameGroups;
 };
 
 #endif

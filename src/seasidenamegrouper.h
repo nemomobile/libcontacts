@@ -34,7 +34,6 @@
 
 #include "contactcacheexport.h"
 
-#include <QChar>
 #include <QList>
 #include <QContact>
 
@@ -50,8 +49,8 @@ public:
     SeasideNameGrouper() {}
     virtual ~SeasideNameGrouper() {}
 
-    virtual QChar nameGroupForContact(const QContact &contact, const QString &groupProperty) const = 0;
-    virtual QList<QChar> allNameGroups() const = 0;
+    virtual QString nameGroupForContact(const QContact &contact, const QString &groupProperty) const = 0;
+    virtual QStringList allNameGroups() const = 0;
 };
 
 #endif // SEASIDENAMEGROUPER_H
