@@ -437,6 +437,7 @@ private:
     QList<ContactIdType> m_changedContacts;
     QList<QContactId> m_contactsToFetchConstituents;
     QList<QContactId> m_contactsToFetchCandidates;
+    QList<QContactId> m_contactsToLinkTo;
     QList<QPair<ContactLinkRequest, ContactLinkRequest> > m_contactPairsToLink;
     QList<QContactRelationship> m_relationshipsToSave;
     QList<QContactRelationship> m_relationshipsToRemove;
@@ -483,8 +484,8 @@ private:
     bool m_updatesPending;
     bool m_refreshRequired;
     bool m_contactsUpdated;
-    QList<ContactIdType> m_constituentIds;
-    QList<ContactIdType> m_candidateIds;
+    QSet<ContactIdType> m_constituentIds;
+    QSet<ContactIdType> m_candidateIds;
 
     struct ResolveData {
         QString first;

@@ -1163,9 +1163,9 @@ bool SeasideCache::event(QEvent *event)
         // Fetch the constituent information (even if they're already in the
         // cache, because we don't update non-aggregates on change notifications)
 #ifdef USING_QTPIM
-        m_fetchByIdRequest.setIds(m_constituentIds);
+        m_fetchByIdRequest.setIds(m_constituentIds.toList());
 #else
-        m_fetchByIdRequest.setLocalIds(m_constituentIds);
+        m_fetchByIdRequest.setLocalIds(m_constituentIds.toList());
 #endif
         m_fetchByIdRequest.start();
     } else if (!m_contactsToFetchConstituents.isEmpty() && !m_relationshipsFetchRequest.isActive()) {
@@ -1725,7 +1725,9 @@ void SeasideCache::notifyNameGroupsChanged(const QSet<QString> &groups)
 void SeasideCache::contactIdsAvailable()
 {
     if (!m_contactsToFetchCandidates.isEmpty()) {
-        m_candidateIds.append(m_contactIdRequest.ids());
+        foreach (const ContactIdType &id, m_contactIdRequest.ids()) {
+            m_candidateIds.insert(id);
+        }
         return;
     }
 
@@ -1743,9 +1745,9 @@ void SeasideCache::relationshipsAvailable()
     foreach (const QContactRelationship &rel, m_relationshipsFetchRequest.relationships()) {
         if (rel.relationshipType() == aggregatesRelationship) {
 #ifdef USING_QTPIM
-            m_constituentIds.append(apiId(rel.second()));
+            m_constituentIds.insert(apiId(rel.second()));
 #else
-            m_constituentIds.append(rel.second().localId());
+            m_constituentIds.insert(rel.second().localId());
 #endif
         }
     }
@@ -1871,24 +1873,28 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
     bool activityCompleted = true;
 
     if (request == &m_relationshipsFetchRequest) {
-        if (!m_contactsToFetchConstituents.isEmpty() && m_constituentIds.isEmpty()) {
-            // We didn't find any constituents - report the empty list
+        if (!m_contactsToFetchConstituents.isEmpty()) {
             QContactId aggregateId = m_contactsToFetchConstituents.takeFirst();
+            if (!m_constituentIds.isEmpty()) {
+                m_contactsToLinkTo.append(aggregateId);
+            } else {
+                // We didn't find any constituents - report the empty list
 #ifdef USING_QTPIM
-            CacheItem *cacheItem = itemById(aggregateId);
+                CacheItem *cacheItem = itemById(aggregateId);
 #else
-            CacheItem *cacheItem = itemById(aggregateId.localId());
+                CacheItem *cacheItem = itemById(aggregateId.localId());
 #endif
-            if (cacheItem->itemData) {
-                cacheItem->itemData->constituentsFetched(QList<int>());
-            }
+                if (cacheItem->itemData) {
+                    cacheItem->itemData->constituentsFetched(QList<int>());
+                }
 
-            updateConstituentAggregations(cacheItem->apiId());
+                updateConstituentAggregations(cacheItem->apiId());
+            }
         }
     } else if (request == &m_fetchByIdRequest) {
-        if (!m_contactsToFetchConstituents.isEmpty()) {
+        if (!m_contactsToLinkTo.isEmpty()) {
             // Report these results
-            QContactId aggregateId = m_contactsToFetchConstituents.takeFirst();
+            QContactId aggregateId = m_contactsToLinkTo.takeFirst();
 #ifdef USING_QTPIM
             CacheItem *cacheItem = itemById(aggregateId);
 #else
