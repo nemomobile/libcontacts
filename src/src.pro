@@ -37,18 +37,21 @@ equals(QT_MAJOR_VERSION, 5) {
 DEFINES += CONTACTCACHE_BUILD
 
 SOURCES += \
-    $$PWD/seasidecache.cpp
+    $$PWD/seasidecache.cpp \
+    $$PWD/seasidephotohandler.cpp
 
 HEADERS += \
     $$PWD/contactcacheexport.h \
     $$PWD/seasidecache.h \
     $$PWD/synchronizelists.h \
-    $$PWD/seasidenamegrouper.h
+    $$PWD/seasidenamegrouper.h \
+    $$PWD/seasidephotohandler.h
 
 headers.files = \
     $$PWD/contactcacheexport.h \
     $$PWD/seasidecache.h \
     $$PWD/synchronizelists.h \
-    $$PWD/seasidenamegrouper.h
+    $$PWD/seasidenamegrouper.h \
+    $$PWD/seasidephotohandler.h
 headers.path = $$PREFIX/include/$$TARGET
 INSTALLS += headers
