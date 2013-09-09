@@ -75,25 +75,15 @@ void SeasidePhotoHandler::propertyProcessed(const QVersitDocument &, const QVers
 #endif
 
     // The data might be either a URL, a file path, or encoded image data
-    bool encodedData = false;
-    foreach (const QString &parameter, property.parameters().keys()) {
-        // If there is an 'encoding=' or 'type=' parameter, assume encoded data
-        if ((parameter.compare(QString::fromLatin1("encoding"), Qt::CaseInsensitive) == 0) ||
-            (parameter.compare(QString::fromLatin1("type"), Qt::CaseInsensitive) == 0)) {
-            encodedData = true;
-            break;
-        }
-    }
+    // It's hard to tell what the content is, because versit removes the encoding
+    // information in the process of decoding the data...
 
-    QUrl url;
-
-    if (!encodedData) {
-        // Assume the data is a URL
-        QString path(property.variantValue().toString());
-        url = QUrl(path);
-
-        // Treat remote URL as a true URL; local file should be copied into our cache
-        if (url.isValid() && !url.scheme().isEmpty() && !url.isLocalFile()) {
+    // Try to interpret the data as a URL
+    QString path(property.variantValue().toString());
+    QUrl url(path);
+    if (url.isValid()) {
+        // Treat remote URL as a true URL, and reference it in the avatar
+        if (!url.scheme().isEmpty() && !url.isLocalFile()) {
             QContactAvatar newAvatar;
             newAvatar.setImageUrl(url);
             updatedDetails->append(newAvatar);
@@ -101,29 +91,37 @@ void SeasidePhotoHandler::propertyProcessed(const QVersitDocument &, const QVers
             // we have successfully processed this PHOTO property.
             *alreadyProcessed = true;
             return;
-        } else {
-            // See if we can resolve the data as a local file
-            url = QUrl::fromLocalFile(path);
         }
+    }
+
+    if (!url.isValid()) {
+        // See if we can resolve the data as a local file path
+        url = QUrl::fromLocalFile(path);
     }
 
     QByteArray photoData;
 
-    if (!encodedData) {
-        QFile file(url.toLocalFile());
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Unable to process photo data as file:" << property.variantValue().toString();
-            return;
-        } else {
-            photoData = file.readAll();
+    if (url.isValid()) {
+        // Try to read the data from the referenced file
+        const QString filePath(url.path());
+        if (QFile::exists(filePath)) {
+            QFile file(filePath);
+            if (!file.open(QIODevice::ReadOnly)) {
+                qWarning() << "Unable to process photo data as file:" << path;
+                return;
+            } else {
+                photoData = file.readAll();
+            }
         }
-    } else {
-        photoData = property.variantValue().toByteArray();
     }
 
     if (photoData.isEmpty()) {
-        qWarning() << "Failed to extract avatar data from vCard PHOTO property";
-        return;
+        // Try to interpret the encoded property data as the image
+        photoData = property.variantValue().toByteArray();
+        if (photoData.isEmpty()) {
+            qWarning() << "Failed to extract avatar data from vCard PHOTO property";
+            return;
+        }
     }
 
     QImage img;
