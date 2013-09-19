@@ -1005,6 +1005,59 @@ QString SeasideCache::generateDisplayLabelFromNonNameDetails(const QContact &con
     return QString();
 }
 
+static QUrl avatarUrlWithMetadata(const QContact &c, const QString &metadataFragment = QString())
+{
+    QList<int> matchingIndices;
+    QList<QContactAvatar> avatarDetails = c.details<QContactAvatar>();
+    for (int i = 0; i < avatarDetails.size(); ++i) {
+        const QContactAvatar &av(avatarDetails[i]);
+        QUrl avatarImageUrl = av.imageUrl();
+        if (avatarImageUrl.isEmpty()) {
+            // ignore empty avatars.
+            continue;
+        } else if (metadataFragment.isEmpty() && av.value(QContactAvatar__FieldAvatarMetadata).toString() == QString(QLatin1String("local"))) {
+            // prefer "local" avatars if no metadata filter is specified.
+            return avatarImageUrl;
+        } else if (metadataFragment.isEmpty() || av.value(QContactAvatar__FieldAvatarMetadata).toString().startsWith(metadataFragment)) {
+            // prefer file system images if possible
+            if (!avatarImageUrl.scheme().isEmpty() && avatarImageUrl.scheme() != "file") {
+                // queue it as fallback.
+                matchingIndices.append(i);
+            } else {
+                // return this local file path image.
+                return avatarImageUrl;
+            }
+        } else {
+            // this avatar doesn't match the metadata requirement.  ignore it.
+            continue;
+        }
+    }
+
+    // no local file path avatar image; use the first fallback.
+    if (matchingIndices.size()) {
+        return avatarDetails[matchingIndices[0]].imageUrl();
+    }
+
+    // no matching avatar image.
+    return QUrl();
+}
+
+QUrl SeasideCache::filteredAvatarUrl(const QContact &contact, const QStringList &metadataFragments)
+{
+    if (metadataFragments.isEmpty()) {
+        return avatarUrlWithMetadata(contact);
+    }
+
+    foreach (const QString &metadataFragment, metadataFragments) {
+        QUrl matchingUrl = avatarUrlWithMetadata(contact, metadataFragment);
+        if (!matchingUrl.isEmpty()) {
+            return matchingUrl;
+        }
+    }
+
+    return QUrl();
+}
+
 QString SeasideCache::normalizePhoneNumber(const QString &input)
 {
     // TODO: use a configuration variable to make this configurable
