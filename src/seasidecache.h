@@ -57,7 +57,6 @@
 
 #include <QBasicTimer>
 #include <QSet>
-#include <QVector>
 
 #include <QElapsedTimer>
 #include <QAbstractListModel>
@@ -334,7 +333,7 @@ public:
     static int importContacts(const QString &path);
     static QString exportContacts();
 
-    static const QVector<ContactIdType> *contacts(FilterType filterType);
+    static const QList<quint32> *contacts(FilterType filterType);
     static bool isPopulated(FilterType filterType);
 
     static QString generateDisplayLabel(const QContact &contact, DisplayLabelOrder order = FirstNameFirst);
@@ -346,8 +345,7 @@ public:
     bool event(QEvent *event);
 
     // For synchronizeLists()
-    int insertRange(int index, int count, const QList<ContactIdType> &source, int sourceIndex) {
-        return insertRange(m_syncFilter, index, count, source, sourceIndex); }
+    int insertRange(int index, int count, const QList<quint32> &source, int sourceIndex) { return insertRange(m_syncFilter, index, count, source, sourceIndex); }
     int removeRange(int index, int count) { removeRange(m_syncFilter, index, count); return 0; }
 
 protected:
@@ -402,16 +400,11 @@ private:
     void reportItemUpdated(CacheItem *item);
 
     void removeRange(FilterType filter, int index, int count);
-    int insertRange(
-            FilterType filter,
-            int index,
-            int count,
-            const QList<ContactIdType> &queryIds,
-            int queryIndex);
+    int insertRange(FilterType filter, int index, int count, const QList<quint32> &queryIds, int queryIndex);
 
-    void contactDataChanged(const ContactIdType &contactId);
-    void contactDataChanged(const ContactIdType &contactId, FilterType filter);
-    void removeContactData(const ContactIdType &contactId, FilterType filter);
+    void contactDataChanged(quint32 iid);
+    void contactDataChanged(quint32 iid, FilterType filter);
+    void removeContactData(quint32 iid, FilterType filter);
     void makePopulated(FilterType filter);
 
     void addToContactNameGroup(quint32 iid, const QString &group, QSet<QString> *modifiedGroups = 0);
@@ -423,7 +416,12 @@ private:
 
     void resolveAddress(ResolveListener *listener, const QString &first, const QString &second, bool requireComplete);
 
+    int contactIndex(quint32 iid, FilterType filter);
+
     static QContactRelationship makeRelationship(const QString &type, const QContact &contact1, const QContact &contact2);
+
+    QList<quint32> m_contacts[FilterTypesCount];
+    QMap<quint32, int> m_contactIndices[FilterTypesCount];
 
     QBasicTimer m_expiryTimer;
     QBasicTimer m_fetchTimer;
@@ -445,7 +443,6 @@ private:
     QScopedPointer<SeasideNameGrouper> m_nameGrouper;
     QList<SeasideNameGroupChangeListener*> m_nameGroupChangeListeners;
     QList<ChangeListener*> m_changeListeners;
-    QVector<ContactIdType> m_contacts[FilterTypesCount];
     QList<ListModel *> m_models[FilterTypesCount];
     QSet<QObject *> m_users;
     QHash<ContactIdType,int> m_expiredContacts;
@@ -473,7 +470,8 @@ private:
     int m_populated;
     int m_cacheIndex;
     int m_queryIndex;
-    int m_appendIndex;
+    int m_fetchProcessedCount;
+    int m_fetchByIdProcessedCount;
     FilterType m_syncFilter;
     DisplayLabelOrder m_displayLabelOrder;
     QString m_sortProperty;
