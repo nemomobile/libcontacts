@@ -1845,17 +1845,10 @@ void SeasideCache::removeRange(FilterType filter, int index, int count)
     for (int i = 0; i < models.count(); ++i)
         models[i]->sourceAboutToRemoveItems(index, index + count - 1);
 
-    QSet<QString> modifiedNameGroups;
-
     for (int i = 0; i < count; ++i) {
         if (filter == FilterAll) {
             const quint32 iid = cacheIds.at(index);
             m_expiredContacts[apiId(iid)] -= 1;
-
-            const QString group(nameGroup(existingItem(iid)));
-            if (!group.isNull()) {
-                removeFromContactNameGroup(iid, group, &modifiedNameGroups);
-            }
         }
 
         m_contactIndices[filter].remove(cacheIds.at(index));
@@ -1864,8 +1857,6 @@ void SeasideCache::removeRange(FilterType filter, int index, int count)
 
     for (int i = 0; i < models.count(); ++i)
         models[i]->sourceItemsRemoved();
-
-    notifyNameGroupsChanged(modifiedNameGroups);
 }
 
 int SeasideCache::insertRange(FilterType filter, int index, int count, const QList<quint32> &queryIds, int queryIndex)
