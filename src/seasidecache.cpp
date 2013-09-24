@@ -1087,8 +1087,8 @@ static QContactFilter filterForMergeCandidates(const QContact &contact)
     QContactFilter rv;
 
     QContactName name(contact.detail<QContactName>());
-    QString firstName(name.firstName());
-    QString lastName(name.lastName());
+    const QString firstName(name.firstName());
+    const QString lastName(name.lastName());
 
     if (firstName.isEmpty() && lastName.isEmpty()) {
         // Use the displayLabel to match with
@@ -1129,6 +1129,15 @@ static QContactFilter filterForMergeCandidates(const QContact &contact)
             nicknameFilter.setMatchFlags(QContactFilter::MatchContains | QContactFilter::MatchFixedString);
             nicknameFilter.setValue(firstName);
             rv = rv | nicknameFilter;
+
+            if (firstName.length() > 3) {
+                // Also look for shortened forms of this name, such as 'Timothy' => 'Tim'
+                QContactDetailFilter shortFilter;
+                setDetailType<QContactName>(shortFilter, QContactName::FieldFirstName);
+                shortFilter.setMatchFlags(QContactFilter::MatchStartsWith | QContactFilter::MatchFixedString);
+                shortFilter.setValue(firstName.left(3));
+                rv = rv | shortFilter;
+            }
         }
         if (!lastName.isEmpty()) {
             // Partial match to last name
@@ -1182,6 +1191,20 @@ static QContactFilter filterForMergeCandidates(const QContact &contact)
         filter.setMatchFlags((index > 0 ? QContactFilter::MatchStartsWith : QContactFilter::MatchExactly) | QContactFilter::MatchFixedString);
         filter.setValue(uri);
         rv = rv | filter;
+    }
+
+    // If we know the contact gender rule out mismatches
+    QContactGender gender(contact.detail<QContactGender>());
+    if (gender.gender() != QContactGender::GenderUnspecified) {
+        QContactDetailFilter matchFilter;
+        setDetailType<QContactGender>(matchFilter, QContactGender::FieldGender);
+        matchFilter.setValue(gender.gender());
+
+        QContactDetailFilter unknownFilter;
+        setDetailType<QContactGender>(unknownFilter, QContactGender::FieldGender);
+        unknownFilter.setValue(QContactGender::GenderUnspecified);
+
+        rv = rv & (matchFilter | unknownFilter);
     }
 
     // Only return aggregate contact IDs
