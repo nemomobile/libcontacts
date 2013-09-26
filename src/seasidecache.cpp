@@ -1447,6 +1447,9 @@ void SeasideCache::contactsRemoved(const QList<ContactIdType> &ids)
             }
             item->listeners = 0;
 
+            // Remove the links to addressible details
+            updateContactIndexing(item->contact, QContact(), item->iid, QSet<DetailTypeId>(), item);
+
             if (!m_keepPopulated) {
                 presentIds.append(id);
             }
