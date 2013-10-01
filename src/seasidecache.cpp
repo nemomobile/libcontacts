@@ -877,6 +877,11 @@ void SeasideCache::removeContactData(quint32 iid, FilterType filter)
     for (int i = 0; i < models.count(); ++i)
         models.at(i)->sourceAboutToRemoveItems(row, row);
 
+    if (m_contacts[filter].size() <= row) {
+        qWarning() << Q_FUNC_INFO << "critical error: specified row not valid";
+        return;
+    }
+
     m_contactIndices[filter].remove(m_contacts[filter].at(row));
     m_contacts[filter].removeAt(row);
 
@@ -1873,6 +1878,10 @@ void SeasideCache::removeRange(FilterType filter, int index, int count)
 
     for (int i = 0; i < count; ++i) {
         if (filter == FilterAll) {
+            if (cacheIds.size() <= index) {
+                qWarning() << Q_FUNC_INFO << "critical error: specified index outside range";
+                return;
+            }
             const quint32 iid = cacheIds.at(index);
             m_expiredContacts[apiId(iid)] -= 1;
         }
@@ -1897,6 +1906,10 @@ int SeasideCache::insertRange(FilterType filter, int index, int count, const QLi
         models[i]->sourceAboutToInsertItems(index, end);
 
     for (int i = 0; i < count; ++i) {
+        if (queryIds.size() <= (queryIndex+i)) {
+            qWarning() << Q_FUNC_INFO << "critical error: query index invalid";
+            continue;
+        }
         quint32 iid = queryIds.at(queryIndex + i);
         if (iid == selfId)
             continue;
@@ -2562,6 +2575,11 @@ int SeasideCache::contactIndex(quint32 iid, FilterType filterType)
         int index = *it;
 
         const QList<quint32> &cacheIds(m_contacts[filterType]);
+        if (index >= cacheIds.size()) {
+            qWarning() << Q_FUNC_INFO << "critical error: cache out of date - invalid index";
+            return -1;
+        }
+
         quint32 contactIid = cacheIds.at(index);
         if (iid != contactIid) {
             // This index is no longer correct - we need to update it
