@@ -879,7 +879,7 @@ void SeasideCache::removeContactData(quint32 iid, FilterType filter)
     for (int i = 0; i < models.count(); ++i)
         models.at(i)->sourceAboutToRemoveItems(row, row);
 
-    m_contactIndices[filter].remove(m_contacts[filter].at(row));
+    m_contactIndices[filter].remove(iid);
     m_contacts[filter].removeAt(row);
 
     if (filter == FilterAll) {
@@ -1872,12 +1872,12 @@ void SeasideCache::removeRange(FilterType filter, int index, int count)
         models[i]->sourceAboutToRemoveItems(index, index + count - 1);
 
     for (int i = 0; i < count; ++i) {
+        const quint32 iid = cacheIds.at(index);
         if (filter == FilterAll) {
-            const quint32 iid = cacheIds.at(index);
             m_expiredContacts[apiId(iid)] -= 1;
         }
 
-        m_contactIndices[filter].remove(cacheIds.at(index));
+        m_contactIndices[filter].remove(iid);
         cacheIds.removeAt(index);
     }
 
@@ -2573,7 +2573,12 @@ int SeasideCache::contactIndex(quint32 iid, FilterType filterType)
 
         if (iid != contactIid) {
             // This index is no longer correct - we need to update it
-            index = cacheIds.indexOf(iid);
+            if (index > (cacheIds.count() / 2)) {
+                // The index is probably close to its previous location - search from the end
+                index = cacheIds.lastIndexOf(iid);
+            } else {
+                index = cacheIds.indexOf(iid);
+            }
             if (index == -1) {
                 indices.erase(it);
             } else {
