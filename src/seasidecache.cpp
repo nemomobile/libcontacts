@@ -2586,6 +2586,15 @@ int SeasideCache::contactIndex(quint32 iid, FilterType filterType)
             }
         }
         return index;
+    } else {
+        // Sanity check - we should not find the ID in this event
+        const QList<quint32> &cacheIds(m_contacts[filterType]);
+        int index = cacheIds.indexOf(iid);
+        if (index != -1) {
+            qWarning() << "Unexpectedly found unindexed IID:" << iid;
+            indices.insert(iid, index);
+            return index;
+        }
     }
 
     return -1;
