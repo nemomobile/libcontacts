@@ -390,7 +390,7 @@ private:
     void keepPopulated(quint32 fetchTypes);
 
     void requestUpdate();
-    void appendContacts(const QList<QContact> &contacts, FilterType filterType, bool partialFetch);
+    void appendContacts(const QList<QContact> &contacts, FilterType filterType, bool partialFetch, const QSet<DetailTypeId> &queryDetailTypes);
     void fetchContacts();
     void updateContacts(const QList<ContactIdType> &contactIds);
 
@@ -465,7 +465,6 @@ private:
     MGConfItem m_sortPropertyConf;
     MGConfItem m_groupPropertyConf;
 #endif
-    int m_resultsRead;
     int m_populated;
     int m_cacheIndex;
     int m_queryIndex;
