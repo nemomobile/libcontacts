@@ -2564,8 +2564,13 @@ int SeasideCache::contactIndex(quint32 iid, FilterType filterType)
     if (it != indices.end()) {
         int index = *it;
 
+        quint32 contactIid = 0;
+
         const QList<quint32> &cacheIds(m_contacts[filterType]);
-        quint32 contactIid = cacheIds.at(index);
+        if (index < cacheIds.count()) {
+            contactIid = cacheIds.at(index);
+        }
+
         if (iid != contactIid) {
             // This index is no longer correct - we need to update it
             index = cacheIds.indexOf(iid);
