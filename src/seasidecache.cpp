@@ -1023,35 +1023,41 @@ QString SeasideCache::generateDisplayLabelFromNonNameDetails(const QContact &con
 
 static QUrl avatarUrlWithMetadata(const QContact &c, const QString &metadataFragment = QString())
 {
-    QList<int> matchingIndices;
+    static const QString localMetadata(QString::fromLatin1("local"));
+    static const QString fileScheme(QString::fromLatin1("file"));
+
+    QUrl fallbackUrl;
+    QUrl remoteFallbackUrl;
+
     QList<QContactAvatar> avatarDetails = c.details<QContactAvatar>();
     for (int i = 0; i < avatarDetails.size(); ++i) {
         const QContactAvatar &av(avatarDetails[i]);
-        QUrl avatarImageUrl = av.imageUrl();
-        if (avatarImageUrl.isEmpty()) {
-            // ignore empty avatars.
-            continue;
-        } else if (metadataFragment.isEmpty() && av.value(QContactAvatar__FieldAvatarMetadata).toString() == QString(QLatin1String("local"))) {
-            // prefer "local" avatars if no metadata filter is specified.
-            return avatarImageUrl;
-        } else if (metadataFragment.isEmpty() || av.value(QContactAvatar__FieldAvatarMetadata).toString().startsWith(metadataFragment)) {
-            // prefer file system images if possible
-            if (!avatarImageUrl.scheme().isEmpty() && avatarImageUrl.scheme() != "file") {
-                // queue it as fallback.
-                matchingIndices.append(i);
-            } else {
-                // return this local file path image.
-                return avatarImageUrl;
-            }
-        } else {
+
+        const QString metadata(av.value(QContactAvatar__FieldAvatarMetadata).toString());
+        if (!metadataFragment.isEmpty() && !metadata.startsWith(metadataFragment)) {
             // this avatar doesn't match the metadata requirement.  ignore it.
             continue;
         }
+
+        const QUrl avatarImageUrl = av.imageUrl();
+
+        if (metadata == localMetadata) {
+            // We have a local avatar record - use the image it specifies
+            return avatarImageUrl;
+        } else {
+            // queue it as fallback - prefer local file system images over remote, if possible
+            const bool remote(!avatarImageUrl.scheme().isEmpty() && avatarImageUrl.scheme() != fileScheme);
+            QUrl &url(remote ? remoteFallbackUrl : fallbackUrl);
+            if (url.isEmpty()) {
+                url = avatarImageUrl;
+            }
+        }
     }
 
-    // no local file path avatar image; use the first fallback.
-    if (matchingIndices.size()) {
-        return avatarDetails[matchingIndices[0]].imageUrl();
+    if (!fallbackUrl.isEmpty()) {
+        return fallbackUrl;
+    } else if (!remoteFallbackUrl.isEmpty()) {
+        return remoteFallbackUrl;
     }
 
     // no matching avatar image.
