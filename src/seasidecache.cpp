@@ -1021,7 +1021,7 @@ QString SeasideCache::generateDisplayLabelFromNonNameDetails(const QContact &con
     return QString();
 }
 
-static QUrl avatarUrlWithMetadata(const QContact &c, const QString &metadataFragment = QString())
+static bool avatarUrlWithMetadata(const QContact &contact, QUrl &matchingUrl, const QString &metadataFragment = QString())
 {
     static const QString localMetadata(QString::fromLatin1("local"));
     static const QString fileScheme(QString::fromLatin1("file"));
@@ -1029,7 +1029,7 @@ static QUrl avatarUrlWithMetadata(const QContact &c, const QString &metadataFrag
     QUrl fallbackUrl;
     QUrl remoteFallbackUrl;
 
-    QList<QContactAvatar> avatarDetails = c.details<QContactAvatar>();
+    QList<QContactAvatar> avatarDetails = contact.details<QContactAvatar>();
     for (int i = 0; i < avatarDetails.size(); ++i) {
         const QContactAvatar &av(avatarDetails[i]);
 
@@ -1043,7 +1043,8 @@ static QUrl avatarUrlWithMetadata(const QContact &c, const QString &metadataFrag
 
         if (metadata == localMetadata) {
             // We have a local avatar record - use the image it specifies
-            return avatarImageUrl;
+            matchingUrl = avatarImageUrl;
+            return true;
         } else {
             // queue it as fallback - prefer local file system images over remote, if possible
             const bool remote(!avatarImageUrl.scheme().isEmpty() && avatarImageUrl.scheme() != fileScheme);
@@ -1055,24 +1056,29 @@ static QUrl avatarUrlWithMetadata(const QContact &c, const QString &metadataFrag
     }
 
     if (!fallbackUrl.isEmpty()) {
-        return fallbackUrl;
+        matchingUrl = fallbackUrl;
+        return true;
     } else if (!remoteFallbackUrl.isEmpty()) {
-        return remoteFallbackUrl;
+        matchingUrl = remoteFallbackUrl;
+        return true;
     }
 
     // no matching avatar image.
-    return QUrl();
+    return false;
 }
 
 QUrl SeasideCache::filteredAvatarUrl(const QContact &contact, const QStringList &metadataFragments)
 {
+    QUrl matchingUrl;
+
     if (metadataFragments.isEmpty()) {
-        return avatarUrlWithMetadata(contact);
+        if (avatarUrlWithMetadata(contact, matchingUrl)) {
+            return matchingUrl;
+        }
     }
 
     foreach (const QString &metadataFragment, metadataFragments) {
-        QUrl matchingUrl = avatarUrlWithMetadata(contact, metadataFragment);
-        if (!matchingUrl.isEmpty()) {
+        if (avatarUrlWithMetadata(contact, matchingUrl, metadataFragment)) {
             return matchingUrl;
         }
     }
