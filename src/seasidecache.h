@@ -433,6 +433,7 @@ private:
     QList<QContact> m_contactsToCreate;
     QList<ContactIdType> m_contactsToRemove;
     QList<ContactIdType> m_changedContacts;
+    QSet<ContactIdType> m_aggregatedContacts;
     QList<QContactId> m_contactsToFetchConstituents;
     QList<QContactId> m_contactsToFetchCandidates;
     QList<QContactId> m_contactsToLinkTo;

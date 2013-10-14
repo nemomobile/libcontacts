@@ -2089,20 +2089,37 @@ void SeasideCache::requestStateChanged(QContactAbstractRequest::State state)
             qWarning() << "ID fetch completed with no filter?";
         }
     } else if (request == &m_relationshipSaveRequest || request == &m_relationshipRemoveRequest) {
-        QSet<ContactIdType> contactIds;
-        foreach (const QContactRelationship &relationship, m_relationshipSaveRequest.relationships() +
-                                                           m_relationshipRemoveRequest.relationships()) {
+        bool completed = false;
+        QList<QContactRelationship> relationships;
+        if (request == &m_relationshipSaveRequest) {
+            relationships = m_relationshipSaveRequest.relationships();
+            completed = !m_relationshipRemoveRequest.isActive();
+        } else {
+            relationships = m_relationshipRemoveRequest.relationships();
+            completed = !m_relationshipSaveRequest.isActive();
+        }
+
+        foreach (const QContactRelationship &relationship, relationships) {
 #ifdef USING_QTPIM
-            contactIds.insert(SeasideCache::apiId(relationship.first()));
+            m_aggregatedContacts.insert(SeasideCache::apiId(relationship.first()));
 #else
-            contactIds.insert(relationship.first().localId());
+            m_aggregatedContacts.insert(relationship.first().localId());
 #endif
         }
 
-        foreach (const ContactIdType &contactId, contactIds) {
-            CacheItem *cacheItem = itemById(contactId);
-            if (cacheItem && cacheItem->itemData)
-                cacheItem->itemData->aggregationOperationCompleted();
+        if (completed) {
+            foreach (const ContactIdType &contactId, m_aggregatedContacts) {
+                CacheItem *cacheItem = itemById(contactId);
+                if (cacheItem && cacheItem->itemData)
+                    cacheItem->itemData->aggregationOperationCompleted();
+            }
+
+            // We need to update these modified contacts immediately
+            foreach (const ContactIdType &id, m_aggregatedContacts)
+                m_changedContacts.append(id);
+            fetchContacts();
+
+            m_aggregatedContacts.clear();
         }
     } else if (request == &m_fetchRequest) {
         if (m_populateProgress == Unpopulated && m_keepPopulated) {
