@@ -262,7 +262,13 @@ StringPair addressPair(const QContactEmailAddress &emailAddress)
 
 StringPair addressPair(const QContactOnlineAccount &account)
 {
-    return qMakePair(account.value<QString>(QContactOnlineAccount__FieldAccountPath), account.accountUri().toLower());
+    StringPair address = qMakePair(account.value<QString>(QContactOnlineAccount__FieldAccountPath), account.accountUri().toLower());
+    return !address.first.isNull() && !address.second.isNull() ? address : StringPair();
+}
+
+bool validAddressPair(const StringPair &address)
+{
+    return (!address.first.isNull() || !address.second.isNull());
 }
 
 bool ignoreContactForNameGroups(const QContact &contact)
@@ -1633,12 +1639,16 @@ bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QCont
     if (queryDetailTypes.isEmpty() || queryDetailTypes.contains(detailType<QContactPhoneNumber>())) {
         // Addresses which are no longer in the contact should be de-indexed
         foreach (const QContactPhoneNumber &phoneNumber, oldContact.details<QContactPhoneNumber>()) {
-            oldAddresses.insert(addressPair(phoneNumber));
+            const StringPair address(addressPair(phoneNumber));
+            if (validAddressPair(address))
+                oldAddresses.insert(address);
         }
 
         // Update our address indexes for any address details in this contact
         foreach (const QContactPhoneNumber &phoneNumber, contact.details<QContactPhoneNumber>()) {
             const StringPair address(addressPair(phoneNumber));
+            if (!validAddressPair(address))
+                continue;
 
             if (!oldAddresses.remove(address)) {
                 // This address was not previously recorded
@@ -1661,11 +1671,15 @@ bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QCont
 
     if (queryDetailTypes.isEmpty() || queryDetailTypes.contains(detailType<QContactEmailAddress>())) {
         foreach (const QContactEmailAddress &emailAddress, oldContact.details<QContactEmailAddress>()) {
-            oldAddresses.insert(addressPair(emailAddress));
+            const StringPair address(addressPair(emailAddress));
+            if (validAddressPair(address))
+                oldAddresses.insert(address);
         }
 
         foreach (const QContactEmailAddress &emailAddress, contact.details<QContactEmailAddress>()) {
             const StringPair address(addressPair(emailAddress));
+            if (!validAddressPair(address))
+                continue;
 
             if (!oldAddresses.remove(address)) {
                 modified = true;
@@ -1686,11 +1700,15 @@ bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QCont
 
     if (queryDetailTypes.isEmpty() || queryDetailTypes.contains(detailType<QContactOnlineAccount>())) {
         foreach (const QContactOnlineAccount &account, oldContact.details<QContactOnlineAccount>()) {
-            oldAddresses.insert(addressPair(account));
+            const StringPair address(addressPair(account));
+            if (validAddressPair(address))
+                oldAddresses.insert(address);
         }
 
         foreach (const QContactOnlineAccount &account, contact.details<QContactOnlineAccount>()) {
             const StringPair address(addressPair(account));
+            if (!validAddressPair(address))
+                continue;
 
             if (!oldAddresses.remove(address)) {
                 modified = true;
