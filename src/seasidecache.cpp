@@ -1095,6 +1095,11 @@ QString SeasideCache::normalizePhoneNumber(const QString &input)
     // TODO: use a configuration variable to make this configurable
     static const int maxCharacters = 7;
 
+    // If the number if not valid, return null
+    QString validated(QtContactsSqliteExtensions::normalizePhoneNumber(input, QtContactsSqliteExtensions::ValidatePhoneNumber));
+    if (validated.isNull())
+        return validated;
+
     return QtContactsSqliteExtensions::minimizePhoneNumber(input, maxCharacters);
 }
 
