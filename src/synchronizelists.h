@@ -149,6 +149,11 @@ public:
         if (c > lastEqualC) {
             updateRange(agent, lastEqualC, c - lastEqualC, reference, lastEqualR);
         }
+
+        if (c == cache.count() && r < reference.count()) {
+            c += insertRange(agent, c, reference.count() - r, reference, r);
+            r = reference.count();
+        }
     }
 
 private:
@@ -201,10 +206,10 @@ void completeSynchronizeList(
         int &referenceIndex)
 {
     if (cacheIndex < cache.count()) {
-        agent->removeRange(cacheIndex, cache.count() - cacheIndex);
+        removeRange(agent, cacheIndex, cache.count() - cacheIndex);
     }
     if (referenceIndex < reference.count()) {
-        agent->insertRange(cache.count(), reference.count() - referenceIndex, reference, referenceIndex);
+        insertRange(agent, cache.count(), reference.count() - referenceIndex, reference, referenceIndex);
     }
 
     cacheIndex = 0;
