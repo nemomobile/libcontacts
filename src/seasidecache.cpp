@@ -905,6 +905,9 @@ SeasideCache::CacheItem *SeasideCache::itemByPhoneNumber(const QString &number, 
 
 SeasideCache::CacheItem *SeasideCache::itemByEmailAddress(const QString &email, bool requireComplete)
 {
+    if (email.trimmed().isEmpty())
+        return 0;
+
     QHash<QString, quint32>::const_iterator it = instancePtr->m_emailAddressIds.find(email.toLower());
     if (it != instancePtr->m_emailAddressIds.end())
         return itemById(*it, requireComplete);
@@ -914,6 +917,9 @@ SeasideCache::CacheItem *SeasideCache::itemByEmailAddress(const QString &email, 
 
 SeasideCache::CacheItem *SeasideCache::itemByOnlineAccount(const QString &localUid, const QString &remoteUid, bool requireComplete)
 {
+    if (localUid.trimmed().isEmpty() || remoteUid.trimmed().isEmpty())
+        return 0;
+
     QPair<QString, QString> address = qMakePair(localUid, remoteUid.toLower());
 
     QHash<QPair<QString, QString>, quint32>::const_iterator it = instancePtr->m_onlineAccountIds.find(address);
