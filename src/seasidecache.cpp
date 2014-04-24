@@ -1255,7 +1255,18 @@ QString SeasideCache::normalizePhoneNumber(const QString &input, bool validate)
         normalizeFlags |= QtContactsSqliteExtensions::ValidatePhoneNumber;
     }
 
-    return QtContactsSqliteExtensions::normalizePhoneNumber(input, normalizeFlags);
+    const QString normalized(QtContactsSqliteExtensions::normalizePhoneNumber(input, normalizeFlags));
+
+    if (!normalized.isEmpty()) {
+        // The normalized version may contain only DTMF chars - we should
+        // only treat it as a phone number if has an initial numeric component
+        const int digitIndex(normalized.at(0) == QLatin1Char('+') ? 1 : 0);
+        if (digitIndex >= normalized.length() || !normalized.at(digitIndex).isDigit()) {
+            return QString();
+        }
+    }
+
+    return normalized;
 }
 
 QString SeasideCache::minimizePhoneNumber(const QString &input, bool validate)
