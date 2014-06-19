@@ -159,7 +159,8 @@ QContactFetchHint presenceFetchHint()
     QContactFetchHint fetchHint(basicFetchHint());
 
     setDetailTypesHint(fetchHint, DetailList() << detailType<QContactPresence>()
-                                               << detailType<QContactGlobalPresence>());
+                                               << detailType<QContactGlobalPresence>()
+                                               << detailType<QContactOnlineAccount>());
 
     return fetchHint;
 }
@@ -1583,12 +1584,14 @@ void SeasideCache::startRequest(bool *idleProcessing)
                 requestPending = true;
             } else {
                 // Fetch the missing data types for whichever contacts need them
+                m_fetchRequest.setSorting(m_sortOrder);
                 if (unfetchedTypes == SeasideCache::FetchPhoneNumber) {
                     m_fetchRequest.setFilter(QContactStatusFlags::matchFlag(QContactStatusFlags::HasPhoneNumber, QContactFilter::MatchContains));
                 } else if (unfetchedTypes == SeasideCache::FetchEmailAddress) {
                     m_fetchRequest.setFilter(QContactStatusFlags::matchFlag(QContactStatusFlags::HasEmailAddress, QContactFilter::MatchContains));
                 } else if (unfetchedTypes == SeasideCache::FetchAccountUri) {
                     m_fetchRequest.setFilter(QContactStatusFlags::matchFlag(QContactStatusFlags::HasOnlineAccount, QContactFilter::MatchContains));
+                    m_fetchRequest.setSorting(m_onlineSortOrder);
                 } else {
                     m_fetchRequest.setFilter(allFilter());
                 }
@@ -1637,6 +1640,7 @@ void SeasideCache::startRequest(bool *idleProcessing)
             // as the favorites store, so we don't update any favorite with a smaller data subset
             m_activeResolve = &resolve;
             m_fetchRequest.setFetchHint(resolve.requireComplete ? basicFetchHint() : favoriteFetchHint(m_fetchTypes | m_extraFetchTypes));
+            m_fetchRequest.setSorting(QList<QContactSortOrder>());
             m_fetchRequest.start();
 
             m_fetchProcessedCount = 0;
@@ -1664,6 +1668,7 @@ void SeasideCache::startRequest(bool *idleProcessing)
             // we only want to retrieve aggregate contacts that have changed
             m_fetchRequest.setFilter(filter & aggregateFilter());
             m_fetchRequest.setFetchHint(basicFetchHint());
+            m_fetchRequest.setSorting(QList<QContactSortOrder>());
             m_fetchRequest.start();
 
             m_fetchProcessedCount = 0;
@@ -1687,6 +1692,7 @@ void SeasideCache::startRequest(bool *idleProcessing)
 
             m_fetchRequest.setFilter(filter & aggregateFilter());
             m_fetchRequest.setFetchHint(presenceFetchHint());
+            m_fetchRequest.setSorting(QList<QContactSortOrder>());
             m_fetchRequest.start();
 
             m_fetchProcessedCount = 0;
