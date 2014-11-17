@@ -406,6 +406,7 @@ private:
     static QContactRelationship makeRelationship(const QString &type, const QContact &contact1, const QContact &contact2);
 
     QList<quint32> m_contacts[FilterTypesCount];
+    QMap<quint32, int> m_contactIndices[FilterTypesCount];
 
     QBasicTimer m_expiryTimer;
     QBasicTimer m_fetchTimer;

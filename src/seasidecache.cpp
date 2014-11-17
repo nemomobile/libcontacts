@@ -1018,6 +1018,7 @@ void SeasideCache::removeContactData(quint32 iid, FilterType filter)
     for (int i = 0; i < models.count(); ++i)
         models.at(i)->sourceAboutToRemoveItems(row, row);
 
+    m_contactIndices[filter].remove(iid);
     m_contacts[filter].removeAt(row);
 
     if (filter == FilterAll) {
@@ -2415,11 +2416,12 @@ void SeasideCache::removeRange(FilterType filter, int index, int count)
         models[i]->sourceAboutToRemoveItems(index, index + count - 1);
 
     for (int i = 0; i < count; ++i) {
+        const quint32 iid = cacheIds.at(index);
         if (filter == FilterAll) {
-            const quint32 iid = cacheIds.at(index);
             m_expiredContacts[apiId(iid)] -= 1;
         }
 
+        m_contactIndices[filter].remove(iid);
         cacheIds.removeAt(index);
     }
 
@@ -2449,6 +2451,7 @@ int SeasideCache::insertRange(FilterType filter, int index, int count, const QLi
         }
 
         cacheIds.insert(index + i, iid);
+        m_contactIndices[filter].insert(iid, index + i);
     }
 
     for (int i = 0; i < models.count(); ++i)
@@ -2477,6 +2480,7 @@ void SeasideCache::appendContacts(const QList<QContact> &contacts, FilterType fi
             foreach (QContact contact, contacts) {
                 quint32 iid = internalId(contact);
                 cacheIds.append(iid);
+                m_contactIndices[filterType].insert(iid, cacheIds.count() - 1);
 
                 CacheItem *item = existingItem(iid);
                 if (!item) {
@@ -3172,8 +3176,46 @@ SeasideCache::CacheItem *SeasideCache::itemMatchingPhoneNumber(const QString &nu
 
 int SeasideCache::contactIndex(quint32 iid, FilterType filterType)
 {
-    const QList<quint32> &cacheIds(m_contacts[filterType]);
-    return cacheIds.indexOf(iid);
+    QMap<quint32, int> &indices(m_contactIndices[filterType]);
+
+    QMap<quint32, int>::iterator it = indices.find(iid);
+    if (it != indices.end()) {
+        int index = *it;
+
+        quint32 contactIid = 0;
+
+        const QList<quint32> &cacheIds(m_contacts[filterType]);
+        if (index < cacheIds.count()) {
+            contactIid = cacheIds.at(index);
+        }
+
+        if (iid != contactIid) {
+            // This index is no longer correct - we need to update it
+            if (index > (cacheIds.count() / 2)) {
+                // The index is probably close to its previous location - search from the end
+                index = cacheIds.lastIndexOf(iid);
+            } else {
+                index = cacheIds.indexOf(iid);
+            }
+            if (index == -1) {
+                indices.erase(it);
+            } else {
+                *it = index;
+            }
+        }
+        return index;
+    } else {
+        // Sanity check - we should not find the ID in this event
+        const QList<quint32> &cacheIds(m_contacts[filterType]);
+        int index = cacheIds.indexOf(iid);
+        if (index != -1) {
+            qWarning() << "Unexpectedly found unindexed IID:" << iid;
+            indices.insert(iid, index);
+            return index;
+        }
+    }
+
+    return -1;
 }
 
 QContactRelationship SeasideCache::makeRelationship(const QString &type, const QContactId &id1, const QContactId &id2)
