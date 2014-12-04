@@ -1857,6 +1857,7 @@ void SeasideCache::contactsPresenceChanged(const QList<QContactId> &ids)
 void SeasideCache::contactsRemoved(const QList<QContactId> &ids)
 {
     QList<QContactId> presentIds;
+    QSet<StringPair> resolutionChanged;
 
     foreach (const QContactId &id, ids) {
         if (CacheItem *item = existingItem(id)) {
@@ -1874,13 +1875,15 @@ void SeasideCache::contactsRemoved(const QList<QContactId> &ids)
             item->listeners = 0;
 
             // Remove the links to addressible details
-            updateContactIndexing(item->contact, QContact(), item->iid, QSet<QContactDetail::DetailType>(), item);
+            updateContactIndexing(item->contact, QContact(), item->iid, QSet<QContactDetail::DetailType>(), item, resolutionChanged);
 
             if (!m_keepPopulated) {
                 presentIds.append(id);
             }
         }
     }
+
+    notifyAddressResolutionsChanged(resolutionChanged);
 
     if (m_keepPopulated) {
         m_refreshRequired = true;
@@ -2034,7 +2037,8 @@ void SeasideCache::resolveUnknownAddresses(const QString &first, const QString &
     }
 }
 
-bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<QContactDetail::DetailType> &queryDetailTypes, CacheItem *item)
+bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<QContactDetail::DetailType> &queryDetailTypes,
+                                         CacheItem *item, QSet<QPair<QString, QString> > &resolutionChanged)
 {
     bool modified = false;
 
@@ -2061,7 +2065,24 @@ bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QCont
                     resolveUnknownAddresses(address.first, address.second, item);
                 }
 
-                m_phoneNumberIds.insert(address.second, iid);
+                bool alreadyPresent = false;
+                bool otherMatches = false;
+                QMultiHash<QString, quint32>::const_iterator it = m_phoneNumberIds.find(address.second), end = m_phoneNumberIds.constEnd();
+                for ( ; (it != end) && (it.key() == address.second); ++it) {
+                    if (it.value() == iid) {
+                        alreadyPresent = true;
+                    } else {
+                        // Someone else has the same minimized number; the resolution may now be different
+                        otherMatches = true;
+                    }
+                }
+                if (!alreadyPresent) {
+                    m_phoneNumberIds.insert(address.second, iid);
+
+                    if (otherMatches) {
+                        resolutionChanged.insert(address);
+                    }
+                }
             }
         }
 
@@ -2069,8 +2090,23 @@ bool SeasideCache::updateContactIndexing(const QContact &oldContact, const QCont
         if (!oldAddresses.isEmpty()) {
             modified = true;
             foreach (const StringPair &address, oldAddresses) {
-                m_phoneNumberIds.remove(address.second, iid);
+                bool otherMatches = false;
+                QMultiHash<QString, quint32>::iterator it = m_phoneNumberIds.find(address.second);
+                while ((it != m_phoneNumberIds.constEnd()) && (it.key() == address.second)) {
+                    if (it.value() == iid) {
+                        it = m_phoneNumberIds.erase(it);
+                    } else {
+                        ++it;
+                        // Someone else has the same minimized number; the resolution may now be different
+                        otherMatches = true;
+                    }
+                }
+                if (otherMatches) {
+                    // I think we can ignore cases where the only available resolution was removed
+                    resolutionChanged.insert(address);
+                }
             }
+
             oldAddresses.clear();
         }
     }
@@ -2290,6 +2326,7 @@ void SeasideCache::applyPendingContactUpdates()
 void SeasideCache::applyContactUpdates(const QList<QContact> &contacts, const QSet<QContactDetail::DetailType> &queryDetailTypes)
 {
     QSet<QString> modifiedGroups;
+    QSet<StringPair> resolutionChanged;
     const bool partialFetch = !queryDetailTypes.isEmpty();
 
     foreach (QContact contact, contacts) {
@@ -2323,7 +2360,7 @@ void SeasideCache::applyContactUpdates(const QList<QContact> &contacts, const QS
             roleDataChanged |= (contact.detail<QContactGlobalPresence>() != item->contact.detail<QContactGlobalPresence>());
         }
 
-        roleDataChanged |= updateContactIndexing(item->contact, contact, iid, queryDetailTypes, item);
+        roleDataChanged |= updateContactIndexing(item->contact, contact, iid, queryDetailTypes, item, resolutionChanged);
 
         updateCache(item, contact, partialFetch, false);
         roleDataChanged |= (item->displayLabel != oldDisplayLabel);
@@ -2341,6 +2378,7 @@ void SeasideCache::applyContactUpdates(const QList<QContact> &contacts, const QS
         }
     }
 
+    notifyAddressResolutionsChanged(resolutionChanged);
     notifyNameGroupsChanged(modifiedGroups);
 }
 
@@ -2380,6 +2418,16 @@ void SeasideCache::notifyNameGroupsChanged(const QSet<QString> &groups)
 
     for (int i = 0; i < m_nameGroupChangeListeners.count(); ++i)
         m_nameGroupChangeListeners[i]->nameGroupsUpdated(updates);
+}
+
+void SeasideCache::notifyAddressResolutionsChanged(const QSet<QPair<QString, QString> > &addresses)
+{
+    if (addresses.isEmpty())
+        return;
+
+    foreach (ChangeListener *listener, m_changeListeners) {
+        listener->addressResolutionsChanged(addresses);
+    }
 }
 
 void SeasideCache::contactIdsAvailable()
@@ -2470,6 +2518,7 @@ void SeasideCache::appendContacts(const QList<QContact> &contacts, FilterType fi
 
         if (begin <= end) {
             QSet<QString> modifiedGroups;
+            QSet<StringPair> resolutionChanged;
 
             for (int i = 0; i < models.count(); ++i)
                 models.at(i)->sourceAboutToInsertItems(begin, end);
@@ -2489,7 +2538,7 @@ void SeasideCache::appendContacts(const QList<QContact> &contacts, FilterType fi
                     }
                 }
 
-                updateContactIndexing(item->contact, contact, iid, queryDetailTypes, item);
+                updateContactIndexing(item->contact, contact, iid, queryDetailTypes, item, resolutionChanged);
                 updateCache(item, contact, partialFetch, true);
 
                 if (filterType == FilterAll) {
@@ -2500,6 +2549,7 @@ void SeasideCache::appendContacts(const QList<QContact> &contacts, FilterType fi
             for (int i = 0; i < models.count(); ++i)
                 models.at(i)->sourceItemsInserted(begin, end);
 
+            notifyAddressResolutionsChanged(resolutionChanged);
             notifyNameGroupsChanged(modifiedGroups);
         }
     }

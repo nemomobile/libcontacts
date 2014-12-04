@@ -68,6 +68,8 @@ private slots:
     void resolveByAccountNotFound();
 
     void resolveDuringContactLink();
+
+    void resolutionChanged();
 };
 
 namespace {
@@ -76,7 +78,13 @@ struct TestResolveListener : public SeasideCache::ResolveListener {
         : m_resolved(false), m_item(0)
         { }
 
-    virtual void addressResolved(const QString &first, const QString &second, SeasideCache::CacheItem *item)
+    void resolvePhoneNumber(const QString &number, bool requireComplete = true)
+        {
+            m_item = SeasideCache::resolvePhoneNumber(this, number, requireComplete);
+            m_resolved = m_item != 0;
+        }
+
+    virtual void addressResolved(const QString &, const QString &, SeasideCache::CacheItem *item)
         { m_resolved = true; m_item = item; }
 
     bool m_resolved;
@@ -332,6 +340,128 @@ void tst_Resolve::resolveDuringContactLink()
     qSort(names);
     expected << QString::fromLatin1("Dafferd Duck") << QString::fromLatin1("Daffy Duck");
     QCOMPARE(names, expected);
+}
+
+void tst_Resolve::resolutionChanged()
+{
+    // Attach a model so that the cache will process async events
+    struct DummyModel : public SeasideCache::ListModel
+    {
+    public:
+        DummyModel() {
+            SeasideCache::registerModel(this, SeasideCache::FilterFavorites);
+        }
+        ~DummyModel() {
+            SeasideCache::unregisterModel(this);
+        }
+
+        virtual void sourceAboutToRemoveItems(int, int) {}
+        virtual void sourceItemsRemoved() {}
+
+        virtual void sourceAboutToInsertItems(int, int) {}
+        virtual void sourceItemsInserted(int, int) {}
+
+        virtual void sourceDataChanged(int, int) {}
+
+        virtual void sourceItemsChanged() {}
+
+        virtual void makePopulated() {}
+        virtual void updateDisplayLabelOrder() {}
+        virtual void updateSortProperty() {}
+        virtual void updateGroupProperty() {}
+
+        virtual int rowCount(const QModelIndex&) const { return 0; }
+        virtual QVariant data(const QModelIndex&, int) const { return QVariant(); }
+    };
+
+    // Use a listener to observe resolution changes
+    struct ChangeListener : public SeasideCache::ChangeListener {
+        ChangeListener() {
+            SeasideCache::registerChangeListener(this);
+        }
+        ~ChangeListener() {
+            SeasideCache::unregisterChangeListener(this);
+        }
+
+        void itemUpdated(SeasideCache::CacheItem *) {}
+        void itemAboutToBeRemoved(SeasideCache::CacheItem *) {}
+
+        void addressResolutionsChanged(const QSet<QPair<QString, QString> > &changeSet) { addresses |= changeSet; }
+
+        QSet<QPair<QString, QString> > addresses;
+    };
+
+    DummyModel model;
+    ChangeListener changeListener;
+    TestResolveListener listener;
+
+    // Check that our test numbers do not resolve
+    listener.resolvePhoneNumber("988889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QVERIFY(listener.m_item == 0);
+
+    listener.resolvePhoneNumber("188889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QVERIFY(listener.m_item == 0);
+
+    // Create a contact whose phone number does not conflict with any other
+    QVERIFY(makeContact("Freddy", "Fugazi", "61188889999", "", ""));
+
+    // Wait until the addition is processed, which incurs a delay for coalescing events
+    QTest::qWait(1000);
+    QVERIFY(changeListener.addresses.isEmpty());
+
+    listener.resolvePhoneNumber("188889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QCOMPARE(listener.m_item->displayLabel, QString::fromLatin1("Freddy Fugazi"));
+
+    QVERIFY(changeListener.addresses.isEmpty());
+
+    // Create a contact whose number conflicts with an existing one
+    QVERIFY(makeContact("Graeme", "Garden", "99988889999", "", ""));
+
+    // We should have been notified of a resolution change
+    QTRY_COMPARE(changeListener.addresses, (QSet<QPair<QString, QString> >() << qMakePair(QString(), SeasideCache::minimizePhoneNumber("188889999"))));
+    changeListener.addresses.clear();
+
+    // Check that resolution still works correctly
+    listener.resolvePhoneNumber("988889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QCOMPARE(listener.m_item->displayLabel, QString::fromLatin1("Graeme Garden"));
+
+    listener.resolvePhoneNumber("188889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QCOMPARE(listener.m_item->displayLabel, QString::fromLatin1("Freddy Fugazi"));
+
+    // Remove the last added contact
+    QVERIFY(changeListener.addresses.isEmpty());
+    QVERIFY(SeasideCache::manager()->removeContact(m_createdContacts.takeLast()));
+
+    QTRY_COMPARE(changeListener.addresses, (QSet<QPair<QString, QString> >() << qMakePair(QString(), SeasideCache::minimizePhoneNumber("188889999"))));
+    changeListener.addresses.clear();
+
+    // This number now resolves to the alternate match
+    listener.resolvePhoneNumber("988889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QCOMPARE(listener.m_item->displayLabel, QString::fromLatin1("Freddy Fugazi"));
+
+    listener.resolvePhoneNumber("188889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QCOMPARE(listener.m_item->displayLabel, QString::fromLatin1("Freddy Fugazi"));
+
+    // Remove the last added contact
+    QVERIFY(changeListener.addresses.isEmpty());
+    QVERIFY(SeasideCache::manager()->removeContact(m_createdContacts.takeLast()));
+    QTest::qWait(1000);
+    QVERIFY(changeListener.addresses.isEmpty());
+
+    listener.resolvePhoneNumber("988889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QVERIFY(listener.m_item == 0);
+
+    listener.resolvePhoneNumber("188889999");
+    QTRY_VERIFY(listener.m_resolved);
+    QVERIFY(listener.m_item == 0);
 }
 
 #include "tst_resolve.moc"
