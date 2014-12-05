@@ -84,6 +84,18 @@ struct TestResolveListener : public SeasideCache::ResolveListener {
             m_resolved = m_item != 0;
         }
 
+    void resolveEmailAddress(const QString &address, bool requireComplete = true)
+        {
+            m_item = SeasideCache::resolveEmailAddress(this, address, requireComplete);
+            m_resolved = m_item != 0;
+        }
+
+    void resolveOnlineAccount(const QString &localUid, const QString &remoteUid, bool requireComplete = true)
+        {
+            m_item = SeasideCache::resolveOnlineAccount(this, localUid, remoteUid, requireComplete);
+            m_resolved = m_item != 0;
+        }
+
     virtual void addressResolved(const QString &, const QString &, SeasideCache::CacheItem *item)
         { m_resolved = true; m_item = item; }
 
@@ -157,95 +169,71 @@ void tst_Resolve::makeContacts()
 
 void tst_Resolve::resolveByPhone()
 {
-    SeasideCache::CacheItem *item;
     TestResolveListener listener;
     QString number("+358470009955");
 
-    item = SeasideCache::resolvePhoneNumber(&listener, number, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolvePhoneNumber(number);
+    QTRY_VERIFY(listener.m_resolved);
 
-    QContactName name = item->contact.detail<QContactName>();
+    QContactName name = listener.m_item->contact.detail<QContactName>();
     QCOMPARE(name.firstName(), QString::fromLatin1("Daffy"));
 }
 
 void tst_Resolve::resolveByPhoneNotFound()
 {
-    SeasideCache::CacheItem *item;
     TestResolveListener listener;
     QString number("+358470000000");
 
-    item = SeasideCache::resolvePhoneNumber(&listener, number, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolvePhoneNumber(number);
+    QTRY_VERIFY(listener.m_resolved);
 
-    QCOMPARE(item, (SeasideCache::CacheItem *)0);
+    QCOMPARE(listener.m_item, (SeasideCache::CacheItem *)0);
 }
 
 void tst_Resolve::resolveByEmail()
 {
-    SeasideCache::CacheItem *item;
     TestResolveListener listener;
     QString address("berta.b@geemail.com");
 
-    item = SeasideCache::resolveEmailAddress(&listener, address, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolveEmailAddress(address);
+    QTRY_VERIFY(listener.m_resolved);
 
-    QContactName name = item->contact.detail<QContactName>();
+    QContactName name = listener.m_item->contact.detail<QContactName>();
     QCOMPARE(name.firstName(), QString::fromLatin1("Berta"));
 }
 
 void tst_Resolve::resolveByEmailNotFound()
 {
-    SeasideCache::CacheItem *item;
     TestResolveListener listener;
     QString address("example@example.com");
 
-    item = SeasideCache::resolveEmailAddress(&listener, address, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolveEmailAddress(address);
+    QTRY_VERIFY(listener.m_resolved);
 
-    QCOMPARE(item, (SeasideCache::CacheItem *)0);
+    QCOMPARE(listener.m_item, (SeasideCache::CacheItem *)0);
 }
 
 void tst_Resolve::resolveByAccount()
 {
-    SeasideCache::CacheItem *item;
     TestResolveListener listener;
     QString remoteUid("berta.b@geemail.com");
 
-    item = SeasideCache::resolveOnlineAccount(&listener, AccountPath, remoteUid, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolveOnlineAccount(AccountPath, remoteUid);
+    QTRY_VERIFY(listener.m_resolved);
 
-    QContactName name = item->contact.detail<QContactName>();
+    QContactName name = listener.m_item->contact.detail<QContactName>();
     QCOMPARE(name.firstName(), QString::fromLatin1("Berta"));
 }
 
 void tst_Resolve::resolveByAccountNotFound()
 {
-    SeasideCache::CacheItem *item;
     TestResolveListener listener;
     QString remoteUid("example@example.com");
 
-    item = SeasideCache::resolveOnlineAccount(&listener, AccountPath, remoteUid, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolveOnlineAccount(AccountPath, remoteUid);
+    QTRY_VERIFY(listener.m_resolved);
 
-    QCOMPARE(item, (SeasideCache::CacheItem *)0);
+    QCOMPARE(listener.m_item, (SeasideCache::CacheItem *)0);
 }
 
 struct ItemWatcher : public SeasideCache::ItemData {
@@ -275,46 +263,36 @@ struct ItemWatcher : public SeasideCache::ItemData {
 // Test that address resolutions don't interfere with contact linking
 void tst_Resolve::resolveDuringContactLink()
 {
-    SeasideCache::CacheItem *item1;
     TestResolveListener listener1;
     QString address1("daffyd@example.com");
-    SeasideCache::CacheItem *item2;
     TestResolveListener listener2;
     QString address2("daffy.d@example.com");
 
-    item1 = SeasideCache::resolveEmailAddress(&listener1, address1, true);
-    item2 = SeasideCache::resolveEmailAddress(&listener2, address2, true);
-    if (!item1) {
-        QTRY_VERIFY(listener1.m_resolved);
-        item1 = listener1.m_item;
-    }
-    QVERIFY(item1);
-    QCOMPARE(item1->displayLabel, QString::fromLatin1("Daffy Duck"));
-    if (!item2) {
-        QTRY_VERIFY(listener2.m_resolved);
-        item2 = listener2.m_item;
-    }
-    QVERIFY(item2);
-    QCOMPARE(item2->displayLabel, QString::fromLatin1("Dafferd Duck"));
+    listener1.resolveEmailAddress(address1);
+    listener2.resolveEmailAddress(address2);
 
-    int iid = item1->iid;
+    QTRY_VERIFY(listener1.m_resolved);
+    QCOMPARE(listener1.m_item->displayLabel, QString::fromLatin1("Daffy Duck"));
+
+    QTRY_VERIFY(listener2.m_resolved);
+    QCOMPARE(listener2.m_item->displayLabel, QString::fromLatin1("Dafferd Duck"));
+
+    SeasideCache::CacheItem *item1 = listener1.m_item;
+    SeasideCache::CacheItem *item2 = listener2.m_item;
+
+    int iid = listener1.m_item->iid;
     item1->itemData = new ItemWatcher;
     item2->itemData = new ItemWatcher;
     SeasideCache::aggregateContacts(item1->contact, item2->contact);
 
     // Fire off an address resolution simultaneously
-    SeasideCache::CacheItem *item;
     QString number("+358477758885");
     TestResolveListener listener;
-
-    item = SeasideCache::resolvePhoneNumber(&listener, number, true);
-    if (!item) {
-        QTRY_VERIFY(listener.m_resolved);
-        item = listener.m_item;
-    }
+    listener.resolvePhoneNumber(number);
+    QTRY_VERIFY(listener.m_resolved);
 
     // Did the address resolution go ok?
-    QCOMPARE(item->displayLabel, QString::fromLatin1("Ernest Everest"));
+    QCOMPARE(listener.m_item->displayLabel, QString::fromLatin1("Ernest Everest"));
 
     // wait for the aggregation
     item1 = SeasideCache::existingItem(iid);
