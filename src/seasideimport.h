@@ -33,9 +33,18 @@
 #define SEASIDEIMPORT_H
 
 #include "contactcacheexport.h"
+#include "seasidepropertyhandler.h"
+
+#include <QStringList>
+#include <QList>
+#include <QPair>
+#include <QSet>
 
 #include <QContact>
+#include <QContactDetail>
+#include <QContactFilter>
 #include <QVersitDocument>
+#include <QVersitContactHandler>
 
 QTCONTACTS_USE_NAMESPACE
 QTVERSIT_USE_NAMESPACE
@@ -46,7 +55,22 @@ class CONTACTCACHE_EXPORT SeasideImport
     ~SeasideImport();
 
 public:
-    static QList<QContact> buildImportContacts(const QList<QVersitDocument> &details, int *newCounti = 0, int *updatedCount = 0);
+    static QContactFilter localContactFilter();
+    static QList<QContact> buildMergeImportContacts(const QList<QVersitDocument> &details,
+                                                    int *newCount = 0,
+                                                    int *updatedCount = 0);
+    static QList<QContact> buildImportContacts(const QList<QVersitDocument> &details,
+                                               int *newCount = 0,
+                                               int *updatedCount = 0,
+                                               const QSet<QContactDetail::DetailType> &unimportableDetailTypes = (QSet<QContactDetail::DetailType>() << QContactDetail::TypeGlobalPresence << QContactDetail::TypeVersion),
+                                               const QStringList &importableSyncTargets = (QStringList() << QLatin1String("was_local") << QLatin1String("bluetooth")),
+                                               const QContactFilter &mergeMatchFilter = localContactFilter(),
+                                               QContactManager *manager = 0,
+                                               QVersitContactHandler *propertyHandler = 0,
+                                               bool mergeImportListDuplicates = true,
+                                               bool mergeDatabaseDuplicates = true,
+                                               QMap<int, int> *importDuplicateIndexes = 0,
+                                               QMap<int, QContactId> *databaseDuplicateIndexes = 0);
 };
 
 #endif

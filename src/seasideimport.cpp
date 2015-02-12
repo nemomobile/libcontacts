@@ -30,9 +30,7 @@
  */
 
 #include "seasideimport.h"
-
 #include "seasidecache.h"
-#include "seasidepropertyhandler.h"
 
 #include <QContactDetailFilter>
 #include <QContactFetchHint>
@@ -83,20 +81,6 @@ QContactFetchHint basicFetchHint()
     return fetchHint;
 }
 
-QContactFilter localContactFilter()
-{
-    // Contacts that are local to the device have sync target 'local' or 'was_local' or 'bluetooth'
-    QContactDetailFilter filterLocal, filterWasLocal, filterBluetooth;
-    filterLocal.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
-    filterWasLocal.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
-    filterBluetooth.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
-    filterLocal.setValue(QString::fromLatin1("local"));
-    filterWasLocal.setValue(QString::fromLatin1("was_local"));
-    filterBluetooth.setValue(QString::fromLatin1("bluetooth"));
-
-    return filterLocal | filterWasLocal | filterBluetooth;
-}
-
 bool nameIsEmpty(const QContactName &name)
 {
     if (name.isEmpty())
@@ -122,6 +106,49 @@ QString contactNameString(const QContact &contact)
     details.append(name.lastName());
     details.append(name.suffix());
     return details.join(QChar::fromLatin1('|'));
+}
+
+bool allCharactersMatchScript(const QString &s, QChar::Script script)
+{
+    for (int i=0; i<s.length(); i++) {
+        if (s[i].script() != script) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool applyNameFixes(QContactName *nameDetail)
+{
+    // Chinese names shouldn't have a middle name, so if it is present in a Han-script-only
+    // name, it is probably wrong and it should be prepended to the first name instead.
+    QString middleName = nameDetail->middleName();
+    if (middleName.isEmpty()) {
+        return false;
+    }
+    QString firstName = nameDetail->firstName();
+    QString lastName = nameDetail->lastName();
+    if (!allCharactersMatchScript(middleName, QChar::Script_Han)
+            || (!firstName.isEmpty() && !allCharactersMatchScript(firstName, QChar::Script_Han))
+            || (!lastName.isEmpty() && !allCharactersMatchScript(lastName, QChar::Script_Han))) {
+        return false;
+    }
+    nameDetail->setFirstName(middleName + firstName);
+    nameDetail->setMiddleName(QString());
+    return true;
+}
+
+void setNickname(QContact &contact, const QString &text)
+{
+    foreach (const QContactNickname &nick, contact.details<QContactNickname>()) {
+        if (nick.nickname() == text) {
+            return;
+        }
+    }
+
+    QContactNickname nick;
+    nick.setNickname(text);
+    contact.saveDetail(&nick);
 }
 
 
@@ -274,147 +301,188 @@ bool mergeIntoExistingContact(QContact *updateContact, const QContact &importedC
     return rv;
 }
 
-bool updateExistingContact(QContact *updateContact, const QContact &contact)
+bool mergeContacts(QContact *mergeInto, const QContact &contact)
 {
-    // Replace the imported contact with the existing version
-    QContact importedContact(*updateContact);
-    *updateContact = contact;
-
-    return mergeIntoExistingContact(updateContact, importedContact);
+    // this function basically puts details from contact into mergeInto.
+    QContact temp(*mergeInto);
+    *mergeInto = contact;
+    return mergeIntoExistingContact(mergeInto, temp);
 }
 
-void setNickname(QContact &contact, const QString &text)
+}
+
+QContactFilter SeasideImport::localContactFilter()
 {
-    foreach (const QContactNickname &nick, contact.details<QContactNickname>()) {
-        if (nick.nickname() == text) {
-            return;
-        }
-    }
+    // Contacts that are local to the device have sync target 'local' or 'was_local' or 'bluetooth'
+    QContactDetailFilter filterLocal, filterWasLocal, filterBluetooth;
+    filterLocal.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
+    filterWasLocal.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
+    filterBluetooth.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
+    filterLocal.setValue(QString::fromLatin1("local"));
+    filterWasLocal.setValue(QString::fromLatin1("was_local"));
+    filterBluetooth.setValue(QString::fromLatin1("bluetooth"));
 
-    QContactNickname nick;
-    nick.setNickname(text);
-    contact.saveDetail(&nick);
+    return filterLocal | filterWasLocal | filterBluetooth;
 }
 
+QList<QContact> SeasideImport::buildMergeImportContacts(const QList<QVersitDocument> &details,
+                                                int *newCount,
+                                                int *updatedCount)
+{
+    return buildImportContacts(details, newCount, updatedCount);
 }
 
-QList<QContact> SeasideImport::buildImportContacts(const QList<QVersitDocument> &details, int *newCount, int *updatedCount)
+QList<QContact> SeasideImport::buildImportContacts(const QList<QVersitDocument> &details,
+                                                   int *newCount,
+                                                   int *updatedCount,
+                                                   const QSet<QContactDetail::DetailType> &unimportableDetailTypes,
+                                                   const QStringList &importableSyncTargets,
+                                                   const QContactFilter &mergeMatchFilter,
+                                                   QContactManager *manager,
+                                                   QVersitContactHandler *propertyHandler,
+                                                   bool mergeImportListDuplicates,
+                                                   bool mergeDatabaseDuplicates,
+                                                   QMap<int, int> *importDuplicateIndexes,
+                                                   QMap<int, QContactId> *databaseDuplicateIndexes)
 {
     if (newCount)
         *newCount = 0;
     if (updatedCount)
         *updatedCount = 0;
 
+    // For tracking dropped documents due to de-duplication and merging
+    QMap<int, int> originalIndexToMergeIndex;
+    QMap<int, QContactId> originalIndexToMergeId;
+
     // Read the contacts from the import details
-    SeasidePropertyHandler propertyHandler;
+    QVersitContactHandler *contactHandler = (propertyHandler ? propertyHandler : new SeasidePropertyHandler());
     QVersitContactImporter importer;
-    importer.setPropertyHandler(&propertyHandler);
+    importer.setPropertyHandler(contactHandler);
     importer.importDocuments(details);
-
     QList<QContact> importedContacts(importer.contacts());
+    if (!propertyHandler) {
+        delete contactHandler;
+    }
 
-    QHash<QString, int> importGuids;
-    QHash<QString, int> importNames;
-    QHash<QString, int> importLabels;
+    // preprocess imported contacts prior to save.
+    QHash<int, QString> importedContactLabels;
+    for (int i = 0; i < importedContacts.size(); ++i) {
+        // Fix up name (field ordering) if required
+        QContact &contact(importedContacts[i]);
+        QContactName nameDetail = contact.detail<QContactName>();
+        if (applyNameFixes(&nameDetail)) {
+            contact.saveDetail(&nameDetail);
+        }
 
-    QSet<QContactDetail::DetailType> unimportableDetailTypes;
-    unimportableDetailTypes.insert(QContactDetail::TypeGlobalPresence);
-    unimportableDetailTypes.insert(QContactDetail::TypeVersion);
-
-    // Merge any duplicates in the import list
-    QList<QContact>::iterator it = importedContacts.begin();
-    while (it != importedContacts.end()) {
-        QContact &contact(*it);
-
-        // Remove any details that our backend can't store
+        // Remove any details that our backend can't store, or which
+        // the client wishes stripped from the imported contacts.
         foreach (QContactDetail detail, contact.details()) {
-            if (detail.type() == QContactSyncTarget::Type) {
+            if (unimportableDetailTypes.contains(detail.type())) {
+                qDebug() << "  Removing unimportable detail:" << detail;
+                contact.removeDetail(&detail);
+            } else if (detail.type() == QContactSyncTarget::Type) {
                 // We allow some syncTarget values
                 const QString syncTarget(detail.value<QString>(QContactSyncTarget::FieldSyncTarget));
-                if (syncTarget == QStringLiteral("was_local") ||
-                    syncTarget == QStringLiteral("bluetooth")) {
-                    // These values are permissible
-                } else {
+                if (!importableSyncTargets.contains(syncTarget)) {
                     qDebug() << "  Removing unimportable syncTarget:" << syncTarget;
                     contact.removeDetail(&detail);
                 }
-            } else if (unimportableDetailTypes.contains(detail.type())) {
-                qDebug() << "  Removing unimportable detail:" << detail;
-                contact.removeDetail(&detail);
             }
         }
 
-        const QString guid = contact.detail<QContactGuid>().guid();
-        const QString name = contactNameString(contact);
-        const bool emptyName = name.isEmpty();
-
-        QString label;
-        if (emptyName) {
+        // Set nickname by default if the name is empty
+        if (contactNameString(contact).isEmpty()) {
             QContactName nameDetail = contact.detail<QContactName>();
             contact.removeDetail(&nameDetail);
+            if (contact.details<QContactNickname>().isEmpty()) {
+                QString label = contact.detail<QContactDisplayLabel>().label();
+                if (label.isEmpty()) {
+                    label = SeasideCache::generateDisplayLabelFromNonNameDetails(contact);
+                }
+                setNickname(contact, label);
+                importedContactLabels.insert(i, label);
+            }
+        }
+    }
 
-            label = contact.detail<QContactDisplayLabel>().label();
-            if (label.isEmpty()) {
+    // if necessary, attempt to remove duplicates from the import list
+    if (mergeImportListDuplicates) {
+        QHash<QString, int> importGuids;
+        QHash<QString, int> importNames;
+        QHash<QString, int> importLabels;
+
+        for (int i = 0; i < importedContacts.size(); ++i) {
+            QContact &contact(importedContacts[i]);
+
+            // select some information from the contact from which we will determine duplicateness
+            const QString guid = contact.detail<QContactGuid>().guid();
+            const QString name = contactNameString(contact);
+            QString label;
+            if (importedContactLabels.contains(i)) {
+                label = importedContactLabels.value(i);
+            } else if (!contact.detail<QContactDisplayLabel>().label().isEmpty()) {
+                label = contact.detail<QContactDisplayLabel>().label();
+            } else {
                 label = SeasideCache::generateDisplayLabelFromNonNameDetails(contact);
             }
-        }
 
-        int previousIndex = -1;
-        QHash<QString, int>::const_iterator git = importGuids.find(guid);
-        if (git != importGuids.end()) {
-            previousIndex = git.value();
-
-            if (!emptyName) {
-                // If we have a GUID match, but names differ, ignore the match
-                const QContact &previous(importedContacts[previousIndex]);
+            // check guid for duplicates
+            int matchingPreviousIndex = importGuids.value(guid, -1);
+            if (matchingPreviousIndex != -1) {
+                // already seen this guid.
+                const QContact &previous(importedContacts[matchingPreviousIndex]);
                 const QString previousName = contactNameString(previous);
-                if (!previousName.isEmpty() && (previousName != name)) {
-                    previousIndex = -1;
+                QString previousLabel;
+                if (importedContactLabels.contains(matchingPreviousIndex)) {
+                    previousLabel = importedContactLabels.value(matchingPreviousIndex);
+                } else if (!previous.detail<QContactDisplayLabel>().label().isEmpty()) {
+                    previousLabel = contact.detail<QContactDisplayLabel>().label();
+                } else {
+                    previousLabel = SeasideCache::generateDisplayLabelFromNonNameDetails(previous);
+                }
 
-                    // Remove the conflicting GUID from this contact
+                // if the names or labels are the same, treat as duplicate.
+                if (name.isEmpty() && previousName.isEmpty() && label == previousLabel) {
+                    // matching label and guid, leave matchingPreviousIndex.
+                } else if (!name.isEmpty() && !previousName.isEmpty() && name == previousName) {
+                    // matching name and guid, leave matchingPreviousIndex.
+                } else {
+                    // non-match.  Remove the guid to avoid conflicts.
                     QContactGuid guidDetail = contact.detail<QContactGuid>();
                     contact.removeDetail(&guidDetail);
-                }
-            }
-        }
-        if (previousIndex == -1) {
-            if (!emptyName) {
-                QHash<QString, int>::const_iterator nit = importNames.find(name);
-                if (nit != importNames.end()) {
-                    previousIndex = nit.value();
-                }
-            } else if (!label.isEmpty()) {
-                // Only if name is empty, use displayLabel - probably SIM import
-                QHash<QString, int>::const_iterator lit = importLabels.find(label);
-                if (lit != importLabels.end()) {
-                    previousIndex = lit.value();
-                }
-            }
-        }
-
-        if (previousIndex != -1) {
-            // Combine these duplicate contacts
-            QContact &previous(importedContacts[previousIndex]);
-            mergeIntoExistingContact(&previous, contact);
-
-            it = importedContacts.erase(it);
-        } else {
-            const int index = it - importedContacts.begin();
-            if (!guid.isEmpty()) {
-                importGuids.insert(guid, index);
-            }
-            if (!emptyName) {
-                importNames.insert(name, index);
-            } else if (!label.isEmpty()) {
-                importLabels.insert(label, index);
-
-                if (contact.details<QContactNickname>().isEmpty()) {
-                    // Modify this contact to have the label as a nickname
-                    setNickname(contact, label);
+                    matchingPreviousIndex = -1; // not a real match.
                 }
             }
 
-            ++it;
+            // check name or label for duplicates
+            if (matchingPreviousIndex == -1) {
+                if (name.isEmpty()) {
+                    // check for contact with duplicate label in list
+                    matchingPreviousIndex = importLabels.value(label, -1);
+                } else {
+                    // check for contact with duplicate name in list
+                    matchingPreviousIndex = importNames.value(name, -1);
+                }
+            }
+
+            // now either save new contact, or merge into previous match.
+            if (matchingPreviousIndex == -1) {
+                // new contact.  add the search data to the hashes.
+                if (!guid.isEmpty()) {
+                    importGuids.insert(guid, i);
+                }
+                if (!name.isEmpty()) {
+                    importNames.insert(name, i);
+                }
+                if (!label.isEmpty()) {
+                    importLabels.insert(label, i);
+                }
+            } else {
+                // duplicate, must merge.
+                QContact &previous(importedContacts[matchingPreviousIndex]);
+                mergeIntoExistingContact(&previous, contact);
+                originalIndexToMergeIndex.insert(i, matchingPreviousIndex);
+            }
         }
     }
 
@@ -427,9 +495,8 @@ QList<QContact> SeasideImport::buildImportContacts(const QList<QVersitDocument> 
     QMap<QContactId, QString> existingContactNames;
     QHash<QString, QContactId> existingNicknames;
 
-    QContactManager *mgr(SeasideCache::manager());
-
-    foreach (const QContact &contact, mgr->contacts(localContactFilter(), QList<QContactSortOrder>(), fetchHint)) {
+    QContactManager *mgr(manager ? manager : SeasideCache::manager());
+    foreach (const QContact &contact, mgr->contacts(mergeMatchFilter, QList<QContactSortOrder>(), fetchHint)) {
         const QString guid = contact.detail<QContactGuid>().guid();
         const QString name = contactNameString(contact);
 
@@ -445,121 +512,127 @@ QList<QContact> SeasideImport::buildImportContacts(const QList<QVersitDocument> 
         }
     }
 
-    // Find any imported contacts that match contacts we already have
-    QMap<QContactId, int> existingIds;
-
-    it = importedContacts.begin();
-    while (it != importedContacts.end()) {
-        const QString guid = (*it).detail<QContactGuid>().guid();
-        const QString name = contactNameString(*it);
-        const bool emptyName = name.isEmpty();
-
-        QContactId existingId;
-
-        QHash<QString, QContactId>::const_iterator git = existingGuids.find(guid);
-        if (git != existingGuids.end()) {
-            existingId = *git;
-
-            if (!emptyName) {
-                // If we have a GUID match, but names differ, ignore the match
-                QMap<QContactId, QString>::iterator nit = existingContactNames.find(existingId);
-                if (nit != existingContactNames.end()) {
-                    const QString &existingName(*nit);
-                    if (!existingName.isEmpty() && (existingName != name)) {
-                        existingId = QContactId();
-
-                        // Remove the conflicting GUID from this contact
-                        QContactGuid guidDetail = (*it).detail<QContactGuid>();
-                        (*it).removeDetail(&guidDetail);
-                    }
-                }
-            }
+    // Find any imported contacts that match contacts we already have.
+    // This allows us to determine which are new, and which are updates.
+    QMap<int, QContactId> existingIds;
+    for (int i = 0; i < importedContacts.size(); ++i) {
+        if (originalIndexToMergeIndex.contains(i)) {
+            // we can ignore this contact, it was merged into another, previously.
+            continue;
         }
-        if (existingId.isNull()) {
-            if (!emptyName) {
-                QHash<QString, QContactId>::const_iterator nit = existingNames.find(name);
-                if (nit != existingNames.end()) {
-                    existingId = *nit;
-                }
+
+        QContact &contact(importedContacts[i]);
+        const QString& guid = contact.detail<QContactGuid>().guid();
+        const QString name = contactNameString(contact);
+
+        QContactId existingMatchId;
+        if (existingGuids.contains(guid)) {
+            // have found a GUID match.  Check to see if the names match also.
+            QContactId guidMatchId = existingGuids.value(guid);
+            if (!name.isEmpty() && existingContactNames[existingMatchId] != name) {
+                // the names don't match, this is a different contact.
+                // remove the guid to avoid conflict.
+                QContactGuid guidDetail = contact.detail<QContactGuid>();
+                contact.removeDetail(&guidDetail);
             } else {
-                foreach (const QContactNickname nick, (*it).details<QContactNickname>()) {
-                    const QString nickname(nick.nickname());
-                    if (!nickname.isEmpty()) {
-                        QHash<QString, QContactId>::const_iterator nit = existingNicknames.find(nickname);
-                        if (nit != existingNicknames.end()) {
-                            existingId = *nit;
-                            break;
-                        }
-                    }
-                }
+                // found a match.
+                existingMatchId = guidMatchId;
+                existingIds.insert(i, existingMatchId); // this will be an update to existing database contact.
+                contact.setId(existingMatchId);
             }
         }
 
-        if (!existingId.isNull()) {
-            QMap<QContactId, int>::iterator eit = existingIds.find(existingId);
-            if (eit == existingIds.end()) {
-                existingIds.insert(existingId, (it - importedContacts.begin()));
-
-                ++it;
-            } else {
-                // Combine these contacts with matching names
-                QContact &previous(importedContacts[*eit]);
-                mergeIntoExistingContact(&previous, *it);
-
-                it = importedContacts.erase(it);
-            }
-        } else {
-            ++it;
+        if (existingMatchId.isNull() && !name.isEmpty() && existingNames.contains(name)) {
+            // found a matching name.
+            existingMatchId = existingNames.value(name);
+            existingIds.insert(i, existingMatchId); // this will be an update to existing database contact.
+            contact.setId(existingMatchId);
         }
     }
 
-    int existingCount(existingIds.count());
-    if (existingCount > 0) {
-        // Retrieve all the contacts that we have matches for
+    // Now build a list of contacts to store to the database.
+    QList<QContact> retn;
+    if (mergeDatabaseDuplicates) {
+        // If the database versions of the matching contacts are identical, merge them if required.
+        // This codepath should only be used for "import" style syncs, where the sync is non-destructive
+        // of data already on the device.
+
+        // Retrieve all the contacts that we have matches for.
         QContactIdFilter idFilter;
-        idFilter.setIds(existingIds.keys());
+        idFilter.setIds(existingIds.values());
+        QList<QContact> existingContacts = mgr->contacts(idFilter & mergeMatchFilter, QList<QContactSortOrder>(), basicFetchHint());
+        for (int i = 0; i < importedContacts.size(); ++i) {
+            if (originalIndexToMergeIndex.contains(i)) {
+                // can skip this one.
+                continue;
+            }
 
-        QSet<QContactId> modifiedContacts;
-        QSet<QContactId> unmodifiedContacts;
-
-        foreach (const QContact &contact, mgr->contacts(idFilter & localContactFilter(), QList<QContactSortOrder>(), basicFetchHint())) {
-            QMap<QContactId, int>::const_iterator it = existingIds.find(contact.id());
-            if (it != existingIds.end()) {
-                // Update the existing version of the contact with any new details
-                QContact &importContact(importedContacts[*it]);
-                bool modified = updateExistingContact(&importContact, contact);
-                if (modified) {
-                    modifiedContacts.insert(importContact.id());
-                } else {
-                    unmodifiedContacts.insert(importContact.id());
+            QContact &importContact(importedContacts[i]);
+            if (existingIds.contains(i)) {
+                // this import contact must have a match in the existingContacts list.
+                Q_FOREACH (const QContact &existing, existingContacts) {
+                    if (existing.id() == importContact.id()) {
+                        bool modified = mergeContacts(&importContact, existing);
+                        if (!modified) {
+                            // the import contact does not differ from the database contact.
+                            // we drop it from the returned list as we don't want to save it.
+                            // first, set this index as "dropped" in favour of the existing contact's id.
+                            originalIndexToMergeId.insert(i, existing.id());
+                            // second, set any indexes who were dropped in favour of us, to be dropped in favour of that id too.
+                            QList<int> originalIndexes = originalIndexToMergeIndex.keys();
+                            Q_FOREACH (int originalIdx, originalIndexes) {
+                                if (originalIndexToMergeIndex.value(originalIdx) == i) {
+                                    originalIndexToMergeId.insert(originalIdx, existing.id());
+                                    originalIndexToMergeIndex.remove(originalIdx); // moved to the other map.
+                                }
+                            }
+                        } else {
+                            // the import contact does differ from the database contact.
+                            retn.append(importContact);
+                            if (updatedCount) *updatedCount += 1;
+                        }
+                        break; // found the match.
+                    }
                 }
             } else {
-                qWarning() << "unable to update existing contact:" << contact.id();
+                // this is a new contact.
+                retn.append(importContact);
+                if (newCount) *newCount += 1;
             }
         }
-
-        if (!unmodifiedContacts.isEmpty()) {
-            QList<QContact>::iterator it = importedContacts.begin();
-            while (it != importedContacts.end()) {
-                const QContact &importContact(*it);
-                const QContactId contactId(importContact.id());
-
-                if (unmodifiedContacts.contains(contactId) && !modifiedContacts.contains(contactId)) {
-                    // This contact was not modified by import - don't update it
-                    it = importedContacts.erase(it);
-                    --existingCount;
+    } else {
+        // This is the "proper sync" codepath
+        // In this codepath, we clobber whatever exists in the database
+        // with the data in this newly imported contact.
+        for (int i = 0; i < importedContacts.size(); ++i) {
+            // ignore any duplicates which we were instructed to ignore.
+            if (!originalIndexToMergeIndex.contains(i)) {
+                retn.append(importedContacts[i]);
+                if (existingIds.contains(i)) {
+                    if (updatedCount) *updatedCount += 1;
                 } else {
-                    ++it;
+                    if (newCount) *newCount += 1;
                 }
             }
         }
     }
 
-    if (updatedCount)
-        *updatedCount = existingCount;
-    if (newCount)
-        *newCount = importedContacts.count() - existingCount;
+    if (importDuplicateIndexes) {
+        // keys are the index of every entry in the input documents list
+        // which was dropped due to being a duplicate of another entry
+        // in the input documents list.
+        // values are the index of the "other entry".
+        *importDuplicateIndexes = originalIndexToMergeIndex;
+    }
 
-    return importedContacts;
+    if (databaseDuplicateIndexes) {
+        // keys are the index of every entry in the input docuemnts list
+        // which was dropped due to being a duplicate of an existing
+        // contact in the database with no changes.
+        // values are the contactId of that pre-existing contact.
+        *databaseDuplicateIndexes = originalIndexToMergeId;
+    }
+
+    return retn;
 }
 
