@@ -246,6 +246,8 @@ public:
 
         virtual void itemUpdated(CacheItem *item) = 0;
         virtual void itemAboutToBeRemoved(CacheItem *item) = 0;
+
+        virtual void addressResolutionsChanged(const QSet<QPair<QString, QString> > &addresses) = 0;
     };
 
     static SeasideCache *instance();
@@ -381,7 +383,8 @@ private:
     void applyContactUpdates(const QList<QContact> &contacts, const QSet<QContactDetail::DetailType> &queryDetailTypes);
 
     void resolveUnknownAddresses(const QString &first, const QString &second, CacheItem *item);
-    bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<QContactDetail::DetailType> &queryDetailTypes, CacheItem *item);
+    bool updateContactIndexing(const QContact &oldContact, const QContact &contact, quint32 iid, const QSet<QContactDetail::DetailType> &queryDetailTypes,
+                               CacheItem *item, QSet<QPair<QString, QString> > &resolutionChanged);
     void updateCache(CacheItem *item, const QContact &contact, bool partialFetch, bool initialInsert);
     void reportItemUpdated(CacheItem *item);
 
@@ -396,6 +399,8 @@ private:
     void addToContactNameGroup(quint32 iid, const QString &group, QSet<QString> *modifiedGroups = 0);
     void removeFromContactNameGroup(quint32 iid, const QString &group, QSet<QString> *modifiedGroups = 0);
     void notifyNameGroupsChanged(const QSet<QString> &groups);
+
+    void notifyAddressResolutionsChanged(const QSet<QPair<QString, QString> > &addresses);
 
     void updateConstituentAggregations(const QContactId &contactId);
     void completeContactAggregation(const QContactId &contact1Id, const QContactId &contact2Id);
