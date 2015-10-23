@@ -1,1 +1,0 @@
-PACKAGENAME=contactcache-qt5
